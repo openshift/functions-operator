@@ -233,12 +233,8 @@ func (r *FunctionReconciler) ensureDeployment(ctx context.Context, function *v1a
 	}
 
 	if !deployed {
-		logger.Info("Function is not deployed. Deploying now")
-		if err := r.deploy(ctx, function, repo); err != nil {
-			function.MarkDeployNotReady("DeployFailed", "Deployment failed: %s", err.Error())
-			return fmt.Errorf("failed to deploy function: %w", err)
-		}
-		function.MarkDeployReady()
+		logger.Info("Function is not deployed")
+		function.MarkDeployNotReady("NotDeployed", "Function not deployed yet")
 		return nil
 	}
 

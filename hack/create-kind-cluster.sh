@@ -13,7 +13,10 @@ REGISTRY_NAME="kind-registry"
 REGISTRY_PORT=${REGISTRY_PORT:-"5001"}
 
 SERVING_VERSION="v1.19.0"
+EVENTING_VERSION="v1.19.0"
 TEKTON_VERSION="v1.6.0"
+KEDA_VERSION="v2.17.0"
+KEDA_HTTP_ADDON_VERSION="v0.12.1"
 
 header=$'\e[1;33m'
 reset=$'\e[0m'
@@ -109,6 +112,29 @@ function install_knative_serving() {
   kubectl wait deployment --all --timeout=-1s --for=condition=Available -n kourier-system
 }
 
+function install_knative_eventing() {
+  header_text "Installing Knative Eventing..."
+  kubectl apply -f https://github.com/knative/eventing/releases/download/knative-${EVENTING_VERSION}/eventing-crds.yaml
+  kubectl apply -f https://github.com/knative/eventing/releases/download/knative-${EVENTING_VERSION}/eventing-core.yaml
+
+  header_text "Waiting for Knative Eventing to be ready..."
+  kubectl wait deployment --all --timeout=-1s --for=condition=Available -n knative-eventing
+}
+
+function install_keda() {
+  header_text "Installing keda"
+  kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/${KEDA_VERSION}/keda-${KEDA_VERSION:1}.yaml
+  kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/${KEDA_VERSION}/keda-${KEDA_VERSION:1}-core.yaml
+  header_text "Waiting for Keda to become ready"
+  kubectl wait deployment --all --timeout=-1s --for=condition=Available --namespace keda
+
+  header_text "Installing keda HTTP add-on"
+  kubectl apply --server-side -f https://github.com/kedacore/http-add-on/releases/download/${KEDA_HTTP_ADDON_VERSION}/keda-add-ons-http-${KEDA_HTTP_ADDON_VERSION:1}-crds.yaml
+  kubectl apply --server-side -f https://github.com/kedacore/http-add-on/releases/download/${KEDA_HTTP_ADDON_VERSION}/keda-add-ons-http-${KEDA_HTTP_ADDON_VERSION:1}.yaml
+  header_text "Waiting for Keda HTTP add-on to become ready"
+  kubectl wait deployment --all --timeout=-1s --for=condition=Available --namespace keda
+}
+
 function install_prometheus() {
   header_text "Installing Prometheus Operator"
 
@@ -132,6 +158,8 @@ create_kind_cluster
 connect_registry_to_cluster
 install_tekton
 install_knative_serving
+install_knative_eventing
+install_keda
 install_prometheus
 
 header_text "All components installed"

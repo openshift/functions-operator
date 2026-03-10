@@ -7,6 +7,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  BUNDLE_IMAGE_NAME: ${{ github.repository }}-bundle
 
 jobs:
   build-push:
@@ -53,6 +54,7 @@ jobs:
           echo "build_timestamp=${BUILD_TIMESTAMP}" >> $GITHUB_OUTPUT
 
       - name: Build and push image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -63,3 +65,24 @@ jobs:
           labels: |
             org.opencontainers.image.revision=${{ steps.meta.outputs.git_sha }}
             org.opencontainers.image.created=${{ steps.meta.outputs.build_timestamp }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Generate bundle manifests
+        run: |
+          make bundle \
+            IMG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${{ steps.build.outputs.digest }} \
+            VERSION=0.0.0-main-${{ steps.meta.outputs.git_sha }} \
+            USE_IMAGE_DIGESTS=true
+
+      - name: Build and push bundle image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: bundle.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.BUNDLE_IMAGE_NAME }}:main

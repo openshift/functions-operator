@@ -36,7 +36,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 
@@ -44,8 +43,6 @@ import (
 	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
-
-const functionFinalizer = "function.functions.dev/finalizer"
 
 // FunctionReconciler reconciles a Function object
 type FunctionReconciler struct {
@@ -120,16 +117,6 @@ func (r *FunctionReconciler) reconcile(ctx context.Context, function *v1alpha1.F
 	}
 	defer repo.Cleanup()
 
-	if err := r.ensureFinalizer(ctx, function); err != nil {
-		return fmt.Errorf("setting up finalizers failed: %w", err)
-	}
-
-	if function.GetDeletionTimestamp() != nil {
-		if err := r.handleDeletion(ctx, function, metadata.Name); err != nil {
-			return fmt.Errorf("deleting function failed: %w", err)
-		}
-	}
-
 	if err := r.ensureDeployment(ctx, function, repo, metadata); err != nil {
 		return fmt.Errorf("deploying function failed: %w", err)
 	}
@@ -170,56 +157,6 @@ func (r *FunctionReconciler) prepareSource(ctx context.Context, function *v1alph
 	function.MarkSourceReady()
 
 	return repo, &metadata, nil
-}
-
-// ensureFinalizer adds the finalizer to the function if it doesn't exist
-func (r *FunctionReconciler) ensureFinalizer(ctx context.Context, function *v1alpha1.Function) error {
-	if controllerutil.ContainsFinalizer(function, functionFinalizer) {
-		return nil
-	}
-
-	logger := log.FromContext(ctx)
-	logger.Info("Adding Finalizer for Function")
-
-	if ok := controllerutil.AddFinalizer(function, functionFinalizer); !ok {
-		return fmt.Errorf("failed to add finalizer for function")
-	}
-
-	if err := r.Update(ctx, function); err != nil {
-		return fmt.Errorf("failed to add finalizer for function: %w", err)
-	}
-
-	return nil
-}
-
-// handleDeletion performs cleanup operations when a function is being deleted
-func (r *FunctionReconciler) handleDeletion(ctx context.Context, function *v1alpha1.Function, functionName string) error {
-	if !controllerutil.ContainsFinalizer(function, functionFinalizer) {
-		return nil
-	}
-
-	logger := log.FromContext(ctx)
-	logger.Info("Performing Finalizer Operations for Function before delete CR")
-
-	// Mark function as terminating
-	function.MarkTerminating()
-
-	// Perform all operations required before removing the finalizer
-	if err := r.Finalize(ctx, functionName, function.Namespace); err != nil {
-		function.MarkFinalizeFailed(err)
-		return fmt.Errorf("failed to perform finalizer for function: %w", err)
-	}
-
-	logger.Info("Removing Finalizer for Function after successfully perform the operations")
-	if ok := controllerutil.RemoveFinalizer(function, functionFinalizer); !ok {
-		return fmt.Errorf("failed to remove finalizer for function")
-	}
-
-	if err := r.Update(ctx, function); err != nil {
-		return fmt.Errorf("failed to remove finalizer for function: %w", err)
-	}
-
-	return nil
 }
 
 // ensureDeployment ensures the function is deployed and up-to-date
@@ -448,13 +385,4 @@ func (r *FunctionReconciler) isMiddlewareLatest(ctx context.Context, metadata *f
 	}
 
 	return latestMiddleware == functionMiddleware, nil
-}
-
-func (r *FunctionReconciler) Finalize(ctx context.Context, name, namespace string) error {
-	err := r.FuncCliManager.Delete(ctx, name, namespace)
-	if err != nil {
-		return fmt.Errorf("failed to finalize function: %w", err)
-	}
-
-	return nil
 }

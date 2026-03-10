@@ -31,7 +31,6 @@ type Manager interface {
 
 	Describe(ctx context.Context, name, namespace string) (funcfn.Instance, error)
 	Deploy(ctx context.Context, repoPath string, namespace string, opts DeployOptions) error
-	Delete(ctx context.Context, name, namespace string) error
 
 	GetCurrentVersion(ctx context.Context) (string, error)
 	GetLatestMiddlewareVersion(ctx context.Context, runtime, invoke string) (string, error)
@@ -230,15 +229,6 @@ func (m *managerImpl) Deploy(ctx context.Context, repoPath string, namespace str
 	out, err := m.Run(ctx, repoPath, deployArgs...)
 	if err != nil {
 		return fmt.Errorf("failed to deploy function: %q. %w", out, err)
-	}
-
-	return nil
-}
-
-func (m *managerImpl) Delete(ctx context.Context, name, namespace string) error {
-	out, err := m.Run(ctx, "", "delete", "--namespace", namespace, name)
-	if err != nil {
-		return fmt.Errorf("failed to delete function: %q. %w", out, err)
 	}
 
 	return nil

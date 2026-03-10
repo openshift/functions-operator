@@ -32,7 +32,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/record"
 	"knative.dev/func/pkg/functions"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	functionsdevv1alpha1 "github.com/functions-dev/func-operator/api/v1alpha1"
@@ -65,12 +64,6 @@ var _ = Describe("Function Controller", func() {
 			resource := &functionsdevv1alpha1.Function{}
 			err := k8sClient.Get(ctx, typeNamespacedName, resource)
 			Expect(err).NotTo(HaveOccurred())
-
-			By("Remove finalizer to allow deletion")
-			if controllerutil.ContainsFinalizer(resource, functionFinalizer) {
-				controllerutil.RemoveFinalizer(resource, functionFinalizer)
-				Expect(k8sClient.Update(ctx, resource)).To(Succeed())
-			}
 
 			By("Cleanup the specific resource instance Function")
 			Expect(k8sClient.Delete(ctx, resource)).To(Succeed())

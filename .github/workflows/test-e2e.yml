@@ -30,7 +30,7 @@ jobs:
         uses: azure/setup-helm@v4.3.0
 
       - name: Setup KinD cluster
-        run: ./hack/create-kind-cluster.sh
+        run: make create-kind-cluster
 
       - name: Install func-operator
         run: make docker-build docker-push deploy

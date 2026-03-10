@@ -29,7 +29,11 @@ jobs:
       - name: Install helm
         uses: azure/setup-helm@v4.3.0
 
+      - name: Setup KinD cluster
+        run: ./hack/create-kind-cluster.sh
+
+      - name: Install func-operator
+        run: make docker-build docker-push deploy
+
       - name: Running Test e2e
-        run: |
-          go mod tidy
-          make test-e2e
+        run: make test-e2e

@@ -18,6 +18,7 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
+  BUNDLE_IMAGE_NAME: ${{ github.repository }}-bundle
 
 jobs:
   build-push-release:
@@ -136,6 +137,47 @@ jobs:
             GIT_SHA_LABEL=${GIT_SHA}
           
           mv dist/install.yaml func-operator.yaml
+
+      - name: Generate bundle manifests
+        run: |
+          # Use digest from whichever build step ran (latest or non-latest)
+          if [ "${{ steps.version.outputs.is_latest }}" == "true" ]; then
+            IMAGE_DIGEST="${{ steps.build_latest.outputs.digest }}"
+          else
+            IMAGE_DIGEST="${{ steps.build_non_latest.outputs.digest }}"
+          fi
+
+          make bundle \
+            IMG=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}@${IMAGE_DIGEST} \
+            VERSION=${{ steps.version.outputs.full }} \
+            USE_IMAGE_DIGESTS=true
+
+      - name: Build and push bundle image (latest version)
+        if: steps.version.outputs.is_latest == 'true'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: bundle.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.BUNDLE_IMAGE_NAME }}:v${{ steps.version.outputs.full }}
+            ${{ env.REGISTRY }}/${{ env.BUNDLE_IMAGE_NAME }}:v${{ steps.version.outputs.major_minor }}
+            ${{ env.REGISTRY }}/${{ env.BUNDLE_IMAGE_NAME }}:v${{ steps.version.outputs.major }}
+            ${{ env.REGISTRY }}/${{ env.BUNDLE_IMAGE_NAME }}:latest
+
+      - name: Build and push bundle image (non-latest version)
+        if: steps.version.outputs.is_latest == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: bundle.Dockerfile
+          platforms: linux/amd64
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.BUNDLE_IMAGE_NAME }}:v${{ steps.version.outputs.full }}
+            ${{ env.REGISTRY }}/${{ env.BUNDLE_IMAGE_NAME }}:v${{ steps.version.outputs.major_minor }}
+            ${{ env.REGISTRY }}/${{ env.BUNDLE_IMAGE_NAME }}:v${{ steps.version.outputs.major }}
 
       - name: Create GitHub Release
         env:

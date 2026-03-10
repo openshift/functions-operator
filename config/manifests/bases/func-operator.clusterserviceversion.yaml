@@ -1,0 +1,47 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: func-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: Function is the Schema for the functions API.
+      displayName: Function
+      kind: Function
+      name: functions.functions.dev
+      version: v1alpha1
+  description: Operator for serverless functions
+  displayName: Functions Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: false
+    type: OwnNamespace
+  - supported: false
+    type: SingleNamespace
+  - supported: false
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - faas
+  links:
+  - name: Func Operator
+    url: https://func-operator.domain
+  maintainers:
+  - email: email@example.com
+    name: creydr
+  maturity: alpha
+  provider:
+    name: knative
+  version: 0.0.0

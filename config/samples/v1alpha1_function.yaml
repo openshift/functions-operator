@@ -5,5 +5,13 @@ metadata:
     app.kubernetes.io/name: func-operator
     app.kubernetes.io/managed-by: kustomize
   name: function-sample
+  namespace: default
 spec:
-  # TODO(user): Add fields here
+  source:
+    repositoryUrl: https://github.com/your-org/your-function.git
+    authSecretRef:
+      name: git-credentials
+  registry:
+    path: quay.io/your-username/my-function
+    authSecretRef:
+      name: registry-credentials

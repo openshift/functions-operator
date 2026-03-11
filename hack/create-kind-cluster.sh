@@ -41,8 +41,31 @@ function setup_local_registry() {
   fi
 
   if [ "$(docker inspect -f '{{.State.Running}}' "${REGISTRY_NAME}" 2>/dev/null || true)" != 'true' ]; then
-    header_text "create registry container for port ${REGISTRY_PORT}"
-    docker run -d --restart=always -p "127.0.0.1:${REGISTRY_PORT}:5000" --name "${REGISTRY_NAME}" docker.io/registry:2
+    header_text "create registry container for port ${REGISTRY_PORT} with HTTPS"
+
+    # Create persistent directory for registry certs in project
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    REGISTRY_CERTS_DIR="${SCRIPT_DIR}/registry-certs"
+    mkdir -p "${REGISTRY_CERTS_DIR}"
+
+    # Generate self-signed certificate if it doesn't exist
+    if [ ! -f "${REGISTRY_CERTS_DIR}/registry.crt" ]; then
+      header_text "Generating self-signed certificate for registry"
+      openssl req -newkey rsa:4096 -nodes -sha256 \
+        -keyout "${REGISTRY_CERTS_DIR}/registry.key" \
+        -x509 -days 365 -out "${REGISTRY_CERTS_DIR}/registry.crt" \
+        -subj "/CN=${REGISTRY_NAME}" \
+        -addext "subjectAltName=DNS:kind-registry,DNS:localhost,IP:127.0.0.1"
+    fi
+
+    # Run registry with HTTPS
+    docker run -d --restart=always \
+      -p "127.0.0.1:${REGISTRY_PORT}:5000" \
+      -v "${REGISTRY_CERTS_DIR}:/certs" \
+      -e REGISTRY_HTTP_TLS_CERTIFICATE=/certs/registry.crt \
+      -e REGISTRY_HTTP_TLS_KEY=/certs/registry.key \
+      --name "${REGISTRY_NAME}" \
+      docker.io/registry:2
   fi
 }
 
@@ -61,7 +84,7 @@ nodes:
 containerdConfigPatches:
 - |-
   [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:$REGISTRY_PORT"]
-    endpoint = ["http://$REGISTRY_NAME:5000"]
+    endpoint = ["https://$REGISTRY_NAME:5000"]
 EOF
 }
 
@@ -84,6 +107,12 @@ data:
     help: "https://kind.sigs.k8s.io/docs/user/local-registry/"
 EOF
 
+  # Install registry certificate on all nodes
+  header_text "Installing registry certificate on cluster nodes"
+  for node in $(kind get nodes --name "$CLUSTER_NAME"); do
+    docker exec "$REGISTRY_NAME" cat /certs/registry.crt | docker exec -i "$node" bash -c 'mkdir -p /usr/local/share/ca-certificates && cat > /usr/local/share/ca-certificates/kind-registry.crt && update-ca-certificates'
+    docker exec "$node" systemctl restart containerd
+  done
 }
 
 function install_tekton() {

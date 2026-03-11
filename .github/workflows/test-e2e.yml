@@ -29,6 +29,10 @@ jobs:
       - name: Install helm
         uses: azure/setup-helm@v4.3.0
 
+        # func CLI is needed in some e2e tests ATM
+      - name: Install func cli
+        uses: functions-dev/action@main
+
       - name: Setup KinD cluster
         run: make create-kind-cluster
 
@@ -36,4 +40,7 @@ jobs:
         run: make docker-build docker-push deploy
 
       - name: Running Test e2e
+        env:
+          REGISTRY_INSECURE: true
+          REGISTRY: kind-registry:5000
         run: make test-e2e

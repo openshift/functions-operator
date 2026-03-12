@@ -164,20 +164,6 @@ function install_keda() {
   kubectl wait deployment --all --timeout=-1s --for=condition=Available --namespace keda
 }
 
-function install_prometheus() {
-  header_text "Installing Prometheus Operator"
-
-  helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-  helm repo update
-  kubectl create namespace prometheus
-  helm install prometheus prometheus-community/kube-prometheus-stack --namespace prometheus \
-    --set grafana.enabled=false \
-    --set prometheus.prometheusSpec.serviceMonitorSelectorNilUsesHelmValues=false
-
-  header_text "Waiting for Prometheus operator to become ready"
-  kubectl wait deployment --all --timeout=-1s --for=condition=Available --namespace prometheus
-}
-
 if [ "$DELETE_CLUSTER_BEFORE" = "true" ]; then
   delete_existing_cluster
 fi
@@ -189,6 +175,5 @@ install_tekton
 install_knative_serving
 install_knative_eventing
 install_keda
-install_prometheus
 
 header_text "All components installed"

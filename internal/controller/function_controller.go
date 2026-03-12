@@ -44,6 +44,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
+const (
+	deployFunctionRoleName = "func-operator-deploy-function"
+)
+
 // FunctionReconciler reconciles a Function object
 type FunctionReconciler struct {
 	client.Client
@@ -58,11 +62,11 @@ type FunctionReconciler struct {
 // +kubebuilder:rbac:groups=functions.dev,resources=functions/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=secrets;services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="serving.knative.dev",resources=services,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="serving.knative.dev",resources=services;routes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="eventing.knative.dev",resources=triggers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=tekton.dev,resources=pipelines;pipelineruns,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=tekton.dev,resources=taskruns,verbs=get;list;watch
-// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups=rbac.authorization.k8s.io,resources=rolebindings;roles,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=http.keda.sh,resources=httpscaledobjects,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile a Function with status update
@@ -213,9 +217,67 @@ func (r *FunctionReconciler) updateFunctionStatus(function *v1alpha1.Function, m
 }
 
 func (r *FunctionReconciler) setupPipelineRBAC(ctx context.Context, function *v1alpha1.Function) error {
+	if err := r.ensureDeployFunctionRole(ctx, function.Namespace); err != nil {
+		return fmt.Errorf("failed to ensure deploy-function role: %w", err)
+	}
+
+	if err := r.ensureDeployFunctionRoleBinding(ctx, function); err != nil {
+		return fmt.Errorf("failed to ensure deploy-function role binding: %w", err)
+	}
+
+	return nil
+}
+
+// ensureDeployFunctionRole ensures the deploy-function Role exists in the namespace and is up-to-date.
+// This is a namespace-scoped Role so multiple operator instances won't conflict.
+func (r *FunctionReconciler) ensureDeployFunctionRole(ctx context.Context, namespace string) error {
 	logger := log.FromContext(ctx)
 
-	logger.Info("Create rolebinding for deploy-function role")
+	expectedRole := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deployFunctionRoleName,
+			Namespace: namespace,
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"serving.knative.dev"},
+				Resources: []string{"services", "routes"},
+				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
+			},
+		},
+	}
+
+	foundRole := &rbacv1.Role{}
+	err := r.Get(ctx, types.NamespacedName{Name: expectedRole.Name, Namespace: expectedRole.Namespace}, foundRole)
+	if err != nil {
+		if apierrors.IsNotFound(err) {
+			if err := r.Create(ctx, expectedRole); err != nil {
+				return fmt.Errorf("failed to create role: %w", err)
+			}
+			logger.Info("Created deploy-function role")
+			return nil
+		}
+		return fmt.Errorf("failed to get role: %w", err)
+	}
+
+	// Role exists - update if needed
+	if !equality.Semantic.DeepEqual(expectedRole.Rules, foundRole.Rules) {
+		foundRole.Rules = expectedRole.Rules
+		if err := r.Update(ctx, foundRole); err != nil {
+			return fmt.Errorf("failed to update role: %w", err)
+		}
+		logger.Info("Updated deploy-function role")
+	} else {
+		logger.Info("Deploy-function role already up to date")
+	}
+
+	return nil
+}
+
+// ensureDeployFunctionRoleBinding ensures the RoleBinding for the deploy-function role exists and is up-to-date.
+func (r *FunctionReconciler) ensureDeployFunctionRoleBinding(ctx context.Context, function *v1alpha1.Function) error {
+	logger := log.FromContext(ctx)
+
 	expectedRoleBinding := &rbacv1.RoleBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "deploy-function-default",
@@ -236,40 +298,39 @@ func (r *FunctionReconciler) setupPipelineRBAC(ctx context.Context, function *v1
 			Namespace: function.Namespace,
 		}},
 		RoleRef: rbacv1.RoleRef{
-			Kind:     "ClusterRole",
-			Name:     "func-operator-deploy-function",
 			APIGroup: "rbac.authorization.k8s.io",
+			Kind:     "Role",
+			Name:     deployFunctionRoleName,
 		},
 	}
+
 	foundRoleBinding := &rbacv1.RoleBinding{}
 	err := r.Get(ctx, types.NamespacedName{Name: expectedRoleBinding.Name, Namespace: expectedRoleBinding.Namespace}, foundRoleBinding)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			if err := r.Create(ctx, expectedRoleBinding); err != nil {
-				return fmt.Errorf("failed to create role binding for deploy-function role: %w", err)
+				return fmt.Errorf("failed to create role binding: %w", err)
 			}
-			logger.Info("Created role binding for deploy-function role")
+			logger.Info("Created deploy-function role binding")
 			return nil
 		}
-		return fmt.Errorf("failed to check if deploy-function role binding already exists: %w", err)
+		return fmt.Errorf("failed to get role binding: %w", err)
 	}
 
 	// Update if needed
 	if !equality.Semantic.DeepDerivative(expectedRoleBinding, foundRoleBinding) {
-		// Copy expected values into found object
 		foundRoleBinding.Subjects = expectedRoleBinding.Subjects
 		foundRoleBinding.RoleRef = expectedRoleBinding.RoleRef
 		foundRoleBinding.OwnerReferences = expectedRoleBinding.OwnerReferences
 
 		if err := r.Update(ctx, foundRoleBinding); err != nil {
-			return fmt.Errorf("failed to update deploy-function role binding: %w", err)
+			return fmt.Errorf("failed to update role binding: %w", err)
 		}
-
 		logger.Info("Updated deploy-function role binding")
-		return nil
+	} else {
+		logger.Info("Deploy-function role binding already up to date")
 	}
 
-	logger.Info("Role binding already exists and is up to date. No need to update")
 	return nil
 }
 

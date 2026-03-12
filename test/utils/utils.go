@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2" // nolint:revive,staticcheck
+	"k8s.io/apimachinery/pkg/util/rand"
 )
 
 // Run executes the provided command within this context
@@ -67,4 +68,16 @@ func GetProjectDir() (string, error) {
 	}
 	wd = strings.ReplaceAll(wd, "/test/e2e", "")
 	return wd, nil
+}
+
+func GetTestNamespace() (string, error) {
+	name := fmt.Sprintf("test-%s", rand.String(8))
+	cmd := exec.Command("kubectl", "create", "namespace", name)
+	_, err := Run(cmd)
+
+	if err != nil {
+		return "", err
+	}
+
+	return name, nil
 }

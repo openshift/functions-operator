@@ -65,6 +65,11 @@ spec:
           - --health-probe-bind-address=:8081
           - --disable-func-cli-update=true
           - --func-cli-path=/func
+        env:
+        - name: WATCH_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.annotations['olm.targetNamespaces']
         image: controller:latest
         imagePullPolicy: Always
         name: manager

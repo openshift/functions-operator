@@ -22,10 +22,12 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/functions-dev/func-operator/internal/git"
 	"github.com/functions-dev/func-operator/internal/monitoring"
+	"sigs.k8s.io/controller-runtime/pkg/cache"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
@@ -194,6 +196,20 @@ func main() {
 		})
 	}
 
+	watchNamespaces := getWatchNamespaces()
+	var cacheOpts cache.Options
+	if len(watchNamespaces) > 0 {
+		setupLog.Info("Operator watching specific namespaces", "namespaces", watchNamespaces)
+
+		// Map the namespaces into the Cache DefaultNamespaces map
+		cacheOpts.DefaultNamespaces = make(map[string]cache.Config)
+		for _, ns := range watchNamespaces {
+			cacheOpts.DefaultNamespaces[strings.TrimSpace(ns)] = cache.Config{}
+		}
+	} else {
+		setupLog.Info("Operator watching all namespaces")
+	}
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
@@ -212,6 +228,7 @@ func main() {
 		// if you are doing or is intended to do any operation such as perform cleanups
 		// after the manager stops then its usage might be unsafe.
 		// LeaderElectionReleaseOnCancel: true,
+		Cache: cacheOpts,
 	})
 	if err != nil {
 		setupLog.Error(err, "unable to start manager")
@@ -281,4 +298,16 @@ func main() {
 		setupLog.Error(err, "problem running manager")
 		os.Exit(1)
 	}
+}
+
+// getWatchNamespaces returns the Namespaces the operator should be watching for changes
+func getWatchNamespaces() []string {
+	watchNamespaceEnvVar := "WATCH_NAMESPACE"
+	ns, found := os.LookupEnv(watchNamespaceEnvVar)
+	if !found || ns == "" {
+		return nil // Return nil to signify "watch all namespaces"
+	}
+
+	// Split by comma to support multiple namespaces
+	return strings.Split(ns, ",")
 }

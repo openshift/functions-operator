@@ -84,6 +84,7 @@ rules:
   - rbac.authorization.k8s.io
   resources:
   - rolebindings
+  - roles
   verbs:
   - create
   - delete
@@ -95,6 +96,7 @@ rules:
 - apiGroups:
   - serving.knative.dev
   resources:
+  - routes
   - services
   verbs:
   - create

@@ -30,6 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	functionsdevv1alpha1 "github.com/functions-dev/func-operator/api/v1alpha1"
+	"github.com/functions-dev/func-operator/test/utils"
 )
 
 var (
@@ -38,6 +39,8 @@ var (
 
 	registry         string
 	registryInsecure bool
+
+	repoProvider utils.RepositoryProvider
 )
 
 // TestE2E runs the end-to-end (e2e) test suite for the project. These tests execute in an isolated,
@@ -79,4 +82,9 @@ var _ = BeforeSuite(func() {
 	if sec := os.Getenv("REGISTRY_INSECURE"); strings.ToLower(sec) == "true" {
 		registryInsecure = true
 	}
+
+	// Initialize repository provider (Gitea)
+	repoProvider, err = utils.NewGiteaClient()
+	Expect(err).NotTo(HaveOccurred())
+	Expect(repoProvider).NotTo(BeNil())
 })

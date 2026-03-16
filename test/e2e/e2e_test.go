@@ -39,7 +39,7 @@ const metricsServiceName = "func-operator-controller-manager-metrics-service"
 // metricsPort is the port of the metrics service providing the managers metrics
 const metricsPort = "8080"
 
-var _ = Describe("Manager", Ordered, func() {
+var _ = Describe("Manager", func() {
 	var controllerPodName string
 
 	// After each test, check for failures and collect logs, events,

@@ -164,6 +164,40 @@ function install_keda() {
   kubectl wait deployment --all --timeout=-1s --for=condition=Available --namespace keda
 }
 
+function install_gitea() {
+  header_text "Installing Gitea"
+
+  helm repo add gitea-charts https://dl.gitea.com/charts/
+  helm repo update
+  helm install gitea gitea-charts/gitea --namespace gitea --create-namespace \
+    --set service.http.type=NodePort \
+    --set service.http.nodePort=30000 \
+    --set service.ssh.type=NodePort \
+    --set service.ssh.nodePort=30022 \
+    --set gitea.admin.username=giteaadmin \
+    --set gitea.admin.password=giteapass \
+    --set gitea.admin.email=admin@gitea.local \
+    --set persistence.enabled=false
+
+  header_text "Waiting for Gitea to become ready"
+  kubectl wait deployment --all --timeout=-1s --for=condition=Available --namespace gitea
+
+  # Get Gitea endpoint for tests
+  GITEA_NODE_IP=$(docker inspect kind-control-plane --format '{{.NetworkSettings.Networks.kind.IPAddress}}')
+
+  # Create ConfigMap with Gitea endpoint info
+  kubectl apply -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: gitea-endpoint
+  namespace: kube-public
+data:
+  http: "http://${GITEA_NODE_IP}:30000"
+  ssh: "${GITEA_NODE_IP}:30022"
+EOF
+}
+
 if [ "$DELETE_CLUSTER_BEFORE" = "true" ]; then
   delete_existing_cluster
 fi
@@ -175,5 +209,6 @@ install_tekton
 install_knative_serving
 install_knative_eventing
 install_keda
+install_gitea
 
 header_text "All components installed"

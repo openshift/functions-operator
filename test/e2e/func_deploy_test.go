@@ -29,35 +29,58 @@ import (
 	. "github.com/onsi/gomega"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/util/rand"
 )
 
-var _ = Describe("Operator", Ordered, func() {
+var _ = Describe("Operator", func() {
 
 	SetDefaultEventuallyTimeout(2 * time.Minute)
 	SetDefaultEventuallyPollingInterval(time.Second)
 
 	Context("with a deployed function", func() {
-		var tempDir string
+		var repoURL string
+		var repoDir string
 		var functionName, functionNamespace string
 
 		BeforeEach(func() {
 			var err error
-			// deploy function
-			tempDir = fmt.Sprintf("%s/func-operator-e2e-%s", os.TempDir(), rand.String(10))
-			Expect(err).NotTo(HaveOccurred())
 
-			cmd := exec.Command("git", "clone", "https://github.com/creydr/func-go-hello-world", tempDir)
-			_, err = utils.Run(cmd)
+			// Create repository provider resources with automatic cleanup
+			username, password, _, cleanup, err := repoProvider.CreateRandomUser()
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanup)
 
-			cmd = exec.Command("func", "deploy",
-				"--path", tempDir,
+			_, repoURL, cleanup, err = repoProvider.CreateRandomRepo(username, false)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanup)
+
+			// Initialize repository with function code
+			repoDir, err = InitializeRepoWithFunction(repoURL, username, password, "go")
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(os.RemoveAll, repoDir)
+
+			functionNamespace, err = utils.GetTestNamespace()
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupNamespaces, functionNamespace)
+
+			// Deploy function using func CLI
+			cmd := exec.Command("func", "deploy",
+				"--namespace", functionNamespace,
+				"--path", repoDir,
 				"--registry", registry,
 				"--registry-insecure", strconv.FormatBool(registryInsecure))
 			out, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
+
+			// Cleanup func deployment
+			DeferCleanup(func() {
+				cmd := exec.Command("func", "delete", "--path", repoDir, "--namespace", functionNamespace)
+				_, _ = utils.Run(cmd)
+			})
+
+			// Commit func.yaml changes
+			err = CommitAndPush(repoDir, "Update func.yaml after deploy", "func.yaml")
+			Expect(err).NotTo(HaveOccurred())
 		})
 
 		AfterEach(func() {
@@ -83,15 +106,12 @@ var _ = Describe("Operator", Ordered, func() {
 				}
 			}
 
-			if tempDir != "" {
-				cmd := exec.Command("func", "delete", "--path", tempDir)
+			// Cleanup function resource
+			if functionName != "" {
+				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
 				_, err := utils.Run(cmd)
 				Expect(err).NotTo(HaveOccurred())
 			}
-
-			cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
-			_, err := utils.Run(cmd)
-			Expect(err).NotTo(HaveOccurred())
 		})
 
 		It("should mark the function as ready", func() {
@@ -99,11 +119,11 @@ var _ = Describe("Operator", Ordered, func() {
 			function := &functionsdevv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "my-function-",
-					Namespace:    "default",
+					Namespace:    functionNamespace,
 				},
 				Spec: functionsdevv1alpha1.FunctionSpec{
 					Source: functionsdevv1alpha1.FunctionSpecSource{
-						RepositoryURL: "https://github.com/creydr/func-go-hello-world",
+						RepositoryURL: repoURL,
 					},
 					Registry: functionsdevv1alpha1.FunctionSpecRegistry{
 						Path:     registry,
@@ -116,7 +136,6 @@ var _ = Describe("Operator", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			functionName = function.Name
-			functionNamespace = function.Namespace
 
 			funcBecomeReady := func(g Gomega) {
 				fn := &functionsdevv1alpha1.Function{}
@@ -137,12 +156,39 @@ var _ = Describe("Operator", Ordered, func() {
 		})
 	})
 	Context("with a not yet deployed function", func() {
+		var repoURL string
+		var repoDir string
 		var functionName, functionNamespace string
 
-		AfterEach(func() {
-			cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
-			_, err := utils.Run(cmd)
+		BeforeEach(func() {
+			var err error
+
+			// Create repository with function code but don't deploy
+			username, password, _, cleanup, err := repoProvider.CreateRandomUser()
 			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanup)
+
+			_, repoURL, cleanup, err = repoProvider.CreateRandomRepo(username, false)
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanup)
+
+			// Initialize repository with function code
+			repoDir, err = InitializeRepoWithFunction(repoURL, username, password, "go")
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(os.RemoveAll, repoDir)
+
+			functionNamespace, err = utils.GetTestNamespace()
+			Expect(err).NotTo(HaveOccurred())
+			DeferCleanup(cleanupNamespaces, functionNamespace)
+		})
+
+		AfterEach(func() {
+			// Cleanup function resource
+			if functionName != "" {
+				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
+				_, err := utils.Run(cmd)
+				Expect(err).NotTo(HaveOccurred())
+			}
 		})
 
 		It("should mark the function as not ready", func() {
@@ -150,11 +196,11 @@ var _ = Describe("Operator", Ordered, func() {
 			function := &functionsdevv1alpha1.Function{
 				ObjectMeta: metav1.ObjectMeta{
 					GenerateName: "my-undeployed-function-",
-					Namespace:    "default",
+					Namespace:    functionNamespace,
 				},
 				Spec: functionsdevv1alpha1.FunctionSpec{
 					Source: functionsdevv1alpha1.FunctionSpecSource{
-						RepositoryURL: "https://github.com/creydr/func-go-hello-world",
+						RepositoryURL: repoURL,
 					},
 					Registry: functionsdevv1alpha1.FunctionSpecRegistry{
 						Path:     registry,
@@ -167,7 +213,6 @@ var _ = Describe("Operator", Ordered, func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			functionName = function.Name
-			functionNamespace = function.Namespace
 
 			funcBecomeReady := func(g Gomega) {
 				fn := &functionsdevv1alpha1.Function{}

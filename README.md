@@ -184,9 +184,15 @@ You can also connect using your IDE's remote debugging features (VS Code, GoLand
 # Unit tests
 make test
 
-# E2E tests
+# E2E tests (requires Kind cluster with Gitea)
+make create-kind-cluster  # Sets up cluster with Gitea
 make test-e2e
+
+# Bundle tests
+make test-e2e-bundle
 ```
+
+E2E tests use an in-cluster Gitea instance instead of GitHub, providing complete test isolation. See [Gitea Integration](docs/development/gitea-integration.md) for details on the test infrastructure.
 
 ### Linting
 

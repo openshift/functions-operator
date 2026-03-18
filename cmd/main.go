@@ -254,7 +254,7 @@ func main() {
 	if err := (&controller.FunctionReconciler{
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
-		Recorder:       mgr.GetEventRecorderFor("functions-controller"),
+		Recorder:       mgr.GetEventRecorder("functions-controller"),
 		FuncCliManager: funcCLIManager,
 		GitManager:     git.NewManager(),
 	}).SetupWithManager(mgr); err != nil {

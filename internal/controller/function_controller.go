@@ -30,7 +30,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/client-go/tools/record"
+	"k8s.io/client-go/tools/events"
 	"k8s.io/utils/ptr"
 	funcfn "knative.dev/func/pkg/functions"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -52,7 +52,7 @@ const (
 type FunctionReconciler struct {
 	client.Client
 	Scheme         *runtime.Scheme
-	Recorder       record.EventRecorder
+	Recorder       events.EventRecorder
 	FuncCliManager funccli.Manager
 	GitManager     git.Manager
 }

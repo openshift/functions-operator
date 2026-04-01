@@ -177,7 +177,12 @@ function install_gitea() {
     --set gitea.admin.username=giteaadmin \
     --set gitea.admin.password=giteapass \
     --set gitea.admin.email=admin@gitea.local \
-    --set persistence.enabled=false
+    --set persistence.enabled=false \
+    --set postgresql-ha.enabled=false \
+    --set postgresql.enabled=true \
+    --set postgresql.persistence.enabled=false \
+    --set redis-cluster.enabled=false \
+    --set redis.enabled=false
 
   header_text "Waiting for Gitea to become ready"
   kubectl wait deployment --all --timeout=-1s --for=condition=Available --namespace gitea

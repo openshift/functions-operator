@@ -54,7 +54,7 @@ var _ = Describe("Operator", func() {
 			DeferCleanup(cleanup)
 
 			// Initialize repository with function code
-			repoDir, err = InitializeRepoWithFunction(repoURL, username, password, "go")
+			repoDir, err = utils.InitializeRepoWithFunction(repoURL, username, password, "go")
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(os.RemoveAll, repoDir)
 
@@ -79,7 +79,7 @@ var _ = Describe("Operator", func() {
 			})
 
 			// Commit func.yaml changes
-			err = CommitAndPush(repoDir, "Update func.yaml after deploy", "func.yaml")
+			err = utils.CommitAndPush(repoDir, "Update func.yaml after deploy", "func.yaml")
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -173,7 +173,7 @@ var _ = Describe("Operator", func() {
 			DeferCleanup(cleanup)
 
 			// Initialize repository with function code
-			repoDir, err = InitializeRepoWithFunction(repoURL, username, password, "go")
+			repoDir, err = utils.InitializeRepoWithFunction(repoURL, username, password, "go")
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(os.RemoveAll, repoDir)
 

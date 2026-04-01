@@ -381,7 +381,7 @@ func createNamespaceAndDeployFunction() TestNamespace {
 	DeferCleanup(cleanup)
 
 	// Initialize repo with function code
-	repoDir, err := InitializeRepoWithFunction(repoURL, username, password, "go")
+	repoDir, err := utils.InitializeRepoWithFunction(repoURL, username, password, "go")
 	Expect(err).NotTo(HaveOccurred())
 	DeferCleanup(os.RemoveAll, repoDir)
 

@@ -43,7 +43,7 @@ jobs:
       - name: Setup KinD cluster
         run: make create-kind-cluster
 
-      - name: Running Bundle Test e2e
+      - name: Running Bundle e2e Tests
         env:
           REGISTRY_INSECURE: true
           REGISTRY: kind-registry:5000

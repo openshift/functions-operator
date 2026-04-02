@@ -46,7 +46,7 @@ jobs:
       - name: Install func-operator
         run: make docker-build docker-push deploy
 
-      - name: Running Test e2e
+      - name: Running e2e Tests
         env:
           REGISTRY_INSECURE: true
           REGISTRY: kind-registry:5000

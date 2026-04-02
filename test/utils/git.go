@@ -32,51 +32,62 @@ func buildAuthURL(repoURL, username, password string) string {
 }
 
 // InitializeRepoWithFunction creates a function project and pushes it to the Gitea repo
-func InitializeRepoWithFunction(repoURL, username, password, language string) (repoDir string, err error) {
-	repoDir = fmt.Sprintf("%s/func-test-%s", os.TempDir(), rand.String(10))
+func InitializeRepoWithFunction(repoURL, username, password, language string) (string, error) {
+	return InitializeRepoWithFunctionVersion(repoURL, username, password, language, "")
+}
+
+// InitializeRepoWithFunctionVersion creates a function project with a specific func CLI version
+// If version is empty, uses the current func CLI
+func InitializeRepoWithFunctionVersion(repoURL, username, password, language, version string) (string, error) {
+	repoDir := fmt.Sprintf("%s/func-test-%s", os.TempDir(), rand.String(10))
 
 	// Build authenticated URL
 	authURL := buildAuthURL(repoURL, username, password)
 
 	// Initialize function (func init creates the directory)
-	cmd := exec.Command("func", "init", "-l", language, repoDir)
-	if _, err = Run(cmd); err != nil {
-		return "", fmt.Errorf("failed to init function: %w", err)
+	if version == "" {
+		if _, err := RunFunc("init", "-l", language, repoDir); err != nil {
+			return "", fmt.Errorf("failed to init function: %w", err)
+		}
+	} else {
+		if _, err := RunFuncWithVersion(version, "init", "-l", language, repoDir); err != nil {
+			return "", fmt.Errorf("failed to init function: %w", err)
+		}
 	}
 
 	// Initialize git repo with main as default branch
-	cmd = exec.Command("git", "-C", repoDir, "init", "-b", "main")
-	if _, err = Run(cmd); err != nil {
+	cmd := exec.Command("git", "-C", repoDir, "init", "-b", "main")
+	if _, err := Run(cmd); err != nil {
 		return "", fmt.Errorf("failed to git init: %w", err)
 	}
 
 	// Configure git user
 	cmd = exec.Command("git", "-C", repoDir, "config", "user.name", "Test User")
-	if _, err = Run(cmd); err != nil {
+	if _, err := Run(cmd); err != nil {
 		return "", fmt.Errorf("failed to set git user.name: %w", err)
 	}
 	cmd = exec.Command("git", "-C", repoDir, "config", "user.email", "test@example.com")
-	if _, err = Run(cmd); err != nil {
+	if _, err := Run(cmd); err != nil {
 		return "", fmt.Errorf("failed to set git user.email: %w", err)
 	}
 
 	// Add remote
 	cmd = exec.Command("git", "-C", repoDir, "remote", "add", "origin", authURL)
-	if _, err = Run(cmd); err != nil {
+	if _, err := Run(cmd); err != nil {
 		return "", fmt.Errorf("failed to add remote: %w", err)
 	}
 
 	// Commit and push
 	cmd = exec.Command("git", "-C", repoDir, "add", ".")
-	if _, err = Run(cmd); err != nil {
+	if _, err := Run(cmd); err != nil {
 		return "", fmt.Errorf("failed to git add: %w", err)
 	}
 	cmd = exec.Command("git", "-C", repoDir, "commit", "-m", "Initial function")
-	if _, err = Run(cmd); err != nil {
+	if _, err := Run(cmd); err != nil {
 		return "", fmt.Errorf("failed to git commit: %w", err)
 	}
 	cmd = exec.Command("git", "-C", repoDir, "push", "-u", "origin", "main")
-	if _, err = Run(cmd); err != nil {
+	if _, err := Run(cmd); err != nil {
 		return "", fmt.Errorf("failed to push initial commit: %w", err)
 	}
 

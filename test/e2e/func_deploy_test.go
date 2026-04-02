@@ -63,19 +63,17 @@ var _ = Describe("Operator", func() {
 			DeferCleanup(cleanupNamespaces, functionNamespace)
 
 			// Deploy function using func CLI
-			cmd := exec.Command("func", "deploy",
+			out, err := utils.RunFunc("deploy",
 				"--namespace", functionNamespace,
 				"--path", repoDir,
 				"--registry", registry,
 				"--registry-insecure", strconv.FormatBool(registryInsecure))
-			out, err := utils.Run(cmd)
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 
 			// Cleanup func deployment
 			DeferCleanup(func() {
-				cmd := exec.Command("func", "delete", "--path", repoDir, "--namespace", functionNamespace)
-				_, _ = utils.Run(cmd)
+				_, _ = utils.RunFunc("delete", "--path", repoDir, "--namespace", functionNamespace)
 			})
 
 			// Commit func.yaml changes
@@ -84,27 +82,7 @@ var _ = Describe("Operator", func() {
 		})
 
 		AfterEach(func() {
-			specReport := CurrentSpecReport()
-			if specReport.Failed() {
-				if functionName != "" {
-					cmd := exec.Command("kubectl", "get", "function", functionName, "-n", functionNamespace, "-o", "yaml")
-					function, err := utils.Run(cmd)
-					if err == nil {
-						_, _ = fmt.Fprintf(GinkgoWriter, "Function:\n %s", function)
-					} else {
-						_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get function: %s", err)
-					}
-				}
-
-				By("Fetching controller manager pod logs")
-				cmd := exec.Command("kubectl", "logs", "-l", "control-plane=controller-manager", "-n", namespace)
-				controllerLogs, err := utils.Run(cmd)
-				if err == nil {
-					_, _ = fmt.Fprintf(GinkgoWriter, "Controller logs:\n %s", controllerLogs)
-				} else {
-					_, _ = fmt.Fprintf(GinkgoWriter, "Failed to get Controller logs: %s", err)
-				}
-			}
+			logFailedTestDetails(functionName, functionNamespace)
 
 			// Cleanup function resource
 			if functionName != "" {

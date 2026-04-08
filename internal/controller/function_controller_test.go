@@ -51,12 +51,9 @@ var _ = Describe("Function Controller", func() {
 		}
 
 		defaultSpec := functionsdevv1alpha1.FunctionSpec{
-			Source: functionsdevv1alpha1.FunctionSpecSource{
-				RepositoryURL: "https://github.com/foo/bar",
-				Reference:     "my-branch",
-			},
-			Registry: functionsdevv1alpha1.FunctionSpecRegistry{
-				Path: "quay.io/foo/bar",
+			Repository: functionsdevv1alpha1.FunctionSpecRepository{
+				URL:    "https://github.com/foo/bar",
+				Branch: "my-branch",
 			},
 		}
 
@@ -115,11 +112,7 @@ var _ = Describe("Function Controller", func() {
 					}, nil)
 					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v2.0.0", nil)
 					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
-					funcMock.EXPECT().Deploy(mock.Anything, mock.Anything, resourceNamespace, funccli.DeployOptions{
-						Registry: "quay.io/foo/bar",
-						GitUrl:   "https://github.com/foo/bar",
-						Builder:  "s2i",
-					}).Return(nil)
+					funcMock.EXPECT().Deploy(mock.Anything, mock.Anything, resourceNamespace, funccli.DeployOptions{}).Return(nil)
 
 					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
 				},
@@ -140,11 +133,8 @@ var _ = Describe("Function Controller", func() {
 			}),
 			Entry("should use main as default branch", reconcileTestCase{
 				spec: functionsdevv1alpha1.FunctionSpec{
-					Source: functionsdevv1alpha1.FunctionSpecSource{
-						RepositoryURL: "https://github.com/foo/bar",
-					},
-					Registry: functionsdevv1alpha1.FunctionSpecRegistry{
-						Path: "quay.io/foo/bar",
+					Repository: functionsdevv1alpha1.FunctionSpecRepository{
+						URL: "https://github.com/foo/bar",
 					},
 				},
 				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {

@@ -8,6 +8,8 @@ rules:
   - ""
   resources:
   - persistentvolumeclaims
+  - pods
+  - pods/attach
   - secrets
   - services
   verbs:

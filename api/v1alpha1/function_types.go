@@ -38,28 +38,36 @@ type Function struct {
 
 // FunctionSpec defines the desired state of Function.
 type FunctionSpec struct {
-	Source   FunctionSpecSource   `json:"source,omitempty"`
-	Registry FunctionSpecRegistry `json:"registry,omitempty"`
+	Repository FunctionSpecRepository `json:"repository,omitempty"`
+	Registry   FunctionSpecRegistry   `json:"registry,omitempty"`
+
+	// AutoUpdateMiddleware defines if the operator should rebuild the function when an outdated middleware is detected.
+	// Defaults to the global operator config.
+	// TODO: implement logic
+	AutoUpdateMiddleware *bool `json:"autoUpdateMiddleware,omitempty"`
 }
 
-type FunctionSpecSource struct {
+type FunctionSpecRepository struct {
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:MinLength=1
-	RepositoryURL string `json:"repositoryUrl"`
+	// URL of the Git repository containing the function
+	URL string `json:"url"`
 
 	// +kubebuilder:validation:Optional
-	Reference string `json:"reference"`
+	// Branch of the repository
+	Branch string `json:"branch,omitempty"`
 
+	// AuthSecretRef defines the reference to the auth secret in case the repository is private and needs authentication
 	AuthSecretRef *v1.LocalObjectReference `json:"authSecretRef,omitempty"`
+
+	// +kubebuilder:validation:Optional
+	// Path points to the function inside the repository. Defaults to "."
+	// TODO: implement logic
+	Path string `json:"path,omitempty"`
 }
 
 type FunctionSpecRegistry struct {
-	// +kubebuilder:validation:Required
-	// +kubebuilder:validation:MinLength=1
-	Path string `json:"path"`
-
-	Insecure bool `json:"insecure,omitempty"`
-
+	// AuthSecretRef is the reference to the secret containing the credentials for the registry authentication
 	AuthSecretRef *v1.LocalObjectReference `json:"authSecretRef,omitempty"`
 }
 

@@ -51,12 +51,16 @@ spec:
           spec:
             description: FunctionSpec defines the desired state of Function.
             properties:
+              autoUpdateMiddleware:
+                description: |-
+                  AutoUpdateMiddleware defines if the operator should rebuild the function when an outdated middleware is detected.
+                  Defaults to the global operator config.
+                type: boolean
               registry:
                 properties:
                   authSecretRef:
-                    description: |-
-                      LocalObjectReference contains enough information to let you locate the
-                      referenced object inside the same namespace.
+                    description: AuthSecretRef is the reference to the secret containing
+                      the credentials for the registry authentication
                     properties:
                       name:
                         default: ""
@@ -69,20 +73,12 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
-                  insecure:
-                    type: boolean
-                  path:
-                    minLength: 1
-                    type: string
-                required:
-                - path
                 type: object
-              source:
+              repository:
                 properties:
                   authSecretRef:
-                    description: |-
-                      LocalObjectReference contains enough information to let you locate the
-                      referenced object inside the same namespace.
+                    description: AuthSecretRef defines the reference to the auth secret
+                      in case the repository is private and needs authentication
                     properties:
                       name:
                         default: ""
@@ -95,13 +91,19 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
-                  reference:
+                  branch:
+                    description: Branch of the repository
                     type: string
-                  repositoryUrl:
+                  path:
+                    description: Path points to the function inside the repository.
+                      Defaults to "."
+                    type: string
+                  url:
+                    description: URL of the Git repository containing the function
                     minLength: 1
                     type: string
                 required:
-                - repositoryUrl
+                - url
                 type: object
             type: object
           status:

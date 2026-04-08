@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"time"
 
 	functionsdevv1alpha1 "github.com/functions-dev/func-operator/api/v1alpha1"
@@ -42,8 +41,6 @@ var _ = Describe("Operator", func() {
 		var functionName, functionNamespace string
 
 		BeforeEach(func() {
-			var err error
-
 			// Create repository provider resources with automatic cleanup
 			username, password, _, cleanup, err := repoProvider.CreateRandomUser()
 			Expect(err).NotTo(HaveOccurred())
@@ -67,7 +64,7 @@ var _ = Describe("Operator", func() {
 				"--namespace", functionNamespace,
 				"--path", repoDir,
 				"--registry", registry,
-				"--registry-insecure", strconv.FormatBool(registryInsecure))
+				fmt.Sprintf("--registry-insecure=%t", registryInsecure))
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 
@@ -100,12 +97,8 @@ var _ = Describe("Operator", func() {
 					Namespace:    functionNamespace,
 				},
 				Spec: functionsdevv1alpha1.FunctionSpec{
-					Source: functionsdevv1alpha1.FunctionSpecSource{
-						RepositoryURL: repoURL,
-					},
-					Registry: functionsdevv1alpha1.FunctionSpecRegistry{
-						Path:     registry,
-						Insecure: registryInsecure,
+					Repository: functionsdevv1alpha1.FunctionSpecRepository{
+						URL: repoURL,
 					},
 				},
 			}
@@ -177,12 +170,8 @@ var _ = Describe("Operator", func() {
 					Namespace:    functionNamespace,
 				},
 				Spec: functionsdevv1alpha1.FunctionSpec{
-					Source: functionsdevv1alpha1.FunctionSpecSource{
-						RepositoryURL: repoURL,
-					},
-					Registry: functionsdevv1alpha1.FunctionSpecRegistry{
-						Path:     registry,
-						Insecure: registryInsecure,
+					Repository: functionsdevv1alpha1.FunctionSpecRepository{
+						URL: repoURL,
 					},
 				},
 			}

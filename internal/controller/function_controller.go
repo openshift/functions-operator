@@ -60,7 +60,7 @@ type FunctionReconciler struct {
 // +kubebuilder:rbac:groups=functions.dev,resources=functions,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=functions.dev,resources=functions/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=functions.dev,resources=functions/finalizers,verbs=update
-// +kubebuilder:rbac:groups="",resources=secrets;services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="",resources=pods;pods/attach;secrets;services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="serving.knative.dev",resources=services;routes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="eventing.knative.dev",resources=triggers,verbs=get;list;watch;create;update;patch;delete
@@ -133,19 +133,19 @@ func (r *FunctionReconciler) reconcile(ctx context.Context, function *v1alpha1.F
 // prepareSource clones the git repository and retrieves function metadata
 func (r *FunctionReconciler) prepareSource(ctx context.Context, function *v1alpha1.Function) (*git.Repository, *funcfn.Function, error) {
 	branchReference := "main"
-	if function.Spec.Source.Reference != "" {
-		branchReference = function.Spec.Source.Reference
+	if function.Spec.Repository.Branch != "" {
+		branchReference = function.Spec.Repository.Branch
 	}
 
 	gitAuthSecret := v1.Secret{}
-	if function.Spec.Source.AuthSecretRef != nil {
-		if err := r.Get(ctx, types.NamespacedName{Namespace: function.Namespace, Name: function.Spec.Source.AuthSecretRef.Name}, &gitAuthSecret); err != nil {
+	if function.Spec.Repository.AuthSecretRef != nil {
+		if err := r.Get(ctx, types.NamespacedName{Namespace: function.Namespace, Name: function.Spec.Repository.AuthSecretRef.Name}, &gitAuthSecret); err != nil {
 			function.MarkSourceNotReady("AuthSecretNotFound", "Auth secret not found: %s", err.Error())
 			return nil, nil, err
 		}
 	}
 
-	repo, err := r.GitManager.CloneRepository(ctx, function.Spec.Source.RepositoryURL, branchReference, gitAuthSecret.Data)
+	repo, err := r.GitManager.CloneRepository(ctx, function.Spec.Repository.URL, branchReference, gitAuthSecret.Data)
 	if err != nil {
 		function.MarkSourceNotReady("GitCloneFailed", "Failed to clone repository: %s", err.Error())
 		return nil, nil, fmt.Errorf("failed to setup git repository: %w", err)
@@ -379,12 +379,7 @@ func (r *FunctionReconciler) deploy(ctx context.Context, function *v1alpha1.Func
 	}
 
 	// deploy function
-	deployOptions := funccli.DeployOptions{
-		Registry:         function.Spec.Registry.Path,
-		InsecureRegistry: function.Spec.Registry.Insecure,
-		GitUrl:           function.Spec.Source.RepositoryURL,
-		Builder:          "s2i",
-	}
+	deployOptions := funccli.DeployOptions{}
 
 	if function.Spec.Registry.AuthSecretRef != nil && function.Spec.Registry.AuthSecretRef.Name != "" {
 		// we have a registry auth secret referenced -> use this for func deploy

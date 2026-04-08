@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"strconv"
 	"time"
 
 	functionsdevv1alpha1 "github.com/functions-dev/func-operator/api/v1alpha1"
@@ -303,12 +302,8 @@ func CreateFunctionAndWaitForReady(testNs TestNamespace) {
 			Namespace:    testNs.Name,
 		},
 		Spec: functionsdevv1alpha1.FunctionSpec{
-			Source: functionsdevv1alpha1.FunctionSpecSource{
-				RepositoryURL: testNs.RepoURL,
-			},
-			Registry: functionsdevv1alpha1.FunctionSpecRegistry{
-				Path:     registry,
-				Insecure: registryInsecure,
+			Repository: functionsdevv1alpha1.FunctionSpecRepository{
+				URL: testNs.RepoURL,
 			},
 		},
 	}
@@ -341,12 +336,8 @@ func CreateFunctionAndWaitForConsistentlyNotReconciled(testNs TestNamespace) {
 			Namespace:    testNs.Name,
 		},
 		Spec: functionsdevv1alpha1.FunctionSpec{
-			Source: functionsdevv1alpha1.FunctionSpecSource{
-				RepositoryURL: testNs.RepoURL,
-			},
-			Registry: functionsdevv1alpha1.FunctionSpecRegistry{
-				Path:     registry,
-				Insecure: registryInsecure,
+			Repository: functionsdevv1alpha1.FunctionSpecRepository{
+				URL: testNs.RepoURL,
 			},
 		},
 	}
@@ -386,14 +377,17 @@ func createNamespaceAndDeployFunction() TestNamespace {
 	DeferCleanup(os.RemoveAll, repoDir)
 
 	// Deploy function
-	cmd := exec.Command("func", "deploy",
+	out, err := utils.RunFunc("deploy",
+		"--namespace", ns,
 		"--path", repoDir,
 		"--registry", registry,
-		"--registry-insecure", strconv.FormatBool(registryInsecure),
-		"--namespace", ns)
-	out, err := utils.Run(cmd)
+		fmt.Sprintf("--registry-insecure=%t", registryInsecure))
 	Expect(err).NotTo(HaveOccurred())
 	_, _ = fmt.Fprint(GinkgoWriter, out)
+
+	// Push updated func.yaml back to repo
+	err = utils.CommitAndPush(repoDir, "Update func.yaml after deploy", "func.yaml")
+	Expect(err).NotTo(HaveOccurred())
 
 	return TestNamespace{Name: ns, RepoURL: repoURL}
 }

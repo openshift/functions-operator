@@ -1,6 +1,6 @@
 # func-operator
 
-A Kubernetes operator for managing serverless functions using the `func` CLI. This operator automates the deployment and lifecycle management of functions from Git repositories to Kubernetes clusters with Knative.
+A Kubernetes operator for managing middleware updates for serverless functions deployed with the `func` CLI. This operator monitors deployed functions and automatically rebuilds them when outdated middleware is detected, ensuring functions stay up-to-date with the latest middleware versions.
 
 ## Prerequisites
 
@@ -21,9 +21,9 @@ kubectl apply -f https://github.com/functions-dev/func-operator/releases/latest/
 
 ## Usage
 
-### Create a Function
+### Register a Function for Middleware Management
 
-Create a `Function` custom resource to deploy a function from a Git repository:
+Create a `Function` custom resource to register an existing function for middleware monitoring and updates:
 
 ```yaml
 apiVersion: functions.dev/v1alpha1
@@ -32,12 +32,11 @@ metadata:
   name: my-function
   namespace: default
 spec:
-  source:
-    repositoryUrl: https://github.com/your-org/your-function.git
+  repository:
+    url: https://github.com/your-org/your-function.git
     authSecretRef:
       name: git-credentials
   registry:
-    path: quay.io/your-username/my-function
     authSecretRef:
       name: registry-credentials
 ```
@@ -46,6 +45,12 @@ Apply the resource:
 
 ```bash
 kubectl apply -f function.yaml
+```
+
+**Note:** This registers an existing function with the operator for middleware management. To initially deploy a function, use the `func` CLI directly:
+
+```bash
+func deploy --path <function-path> --registry <registry-path>
 ```
 
 ### Registry Authentication
@@ -100,7 +105,7 @@ data:
   password: <base64-encoded-password>
 ```
 
-Then reference it in the Function under `.spec.source.authSecretRef.name`
+Then reference it in the Function under `.spec.repository.authSecretRef.name`
 
 ```yaml
 apiVersion: functions.dev/v1alpha1
@@ -109,15 +114,15 @@ metadata:
   name: my-function
   namespace: default
 spec:
-  source:
-    repositoryUrl: https://github.com/your-org/your-function.git
+  repository:
+    url: https://github.com/your-org/your-function.git
     authSecretRef:
       name: git-credentials
 ```
 
 ### Check Function Status
 
-View the status of your function:
+View the middleware status of your function:
 
 ```bash
 kubectl get function my-function -o yaml
@@ -125,7 +130,8 @@ kubectl get function my-function -o yaml
 
 The status will include:
 - Function name and runtime
-- Deployment conditions
+- Middleware update conditions
+- Whether the function needs rebuilding due to outdated middleware
 
 ## Development
 
@@ -205,13 +211,14 @@ make lint
 
 ### Function Spec
 
-| Field                    | Type    | Required | Description                                            |
-|--------------------------|---------|----------|--------------------------------------------------------|
-| `source.repositoryUrl`   | string  | Yes      | Git repository URL containing the function source code |
-| `source.authSecretRef`   | object  | No       | Reference to Git repository authentication secret      |
-| `registry.path`          | string  | Yes      | Container registry path for the function image         |
-| `registry.insecure`      | boolean | No       | Allow insecure registry connections                    |
-| `registry.authSecretRef` | object  | No       | Reference to registry authentication secret            |
+| Field                       | Type    | Required | Description                                                                                      |
+|-----------------------------|---------|----------|--------------------------------------------------------------------------------------------------|
+| `repository.url`            | string  | Yes      | URL of the Git repository containing the function                                                |
+| `repository.branch`         | string  | No       | Branch of the repository                                                                         |
+| `repository.path`           | string  | No       | Path to the function inside the repository. Defaults to "."                                      |
+| `repository.authSecretRef`  | object  | No       | Reference to the auth secret for private repository authentication                               |
+| `registry.authSecretRef`    | object  | No       | Reference to the secret containing credentials for registry authentication                       |
+| `autoUpdateMiddleware`      | boolean | No       | Defines if the operator should rebuild when outdated middleware is detected. Defaults to global operator config |
 
 ### Function Status
 

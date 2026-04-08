@@ -38,13 +38,7 @@ type Manager interface {
 }
 
 type DeployOptions struct {
-	Registry         string
-	InsecureRegistry bool
 	RegistryAuthFile string
-
-	GitUrl string
-
-	Builder string
 }
 
 var _ Manager = &managerImpl{}
@@ -216,17 +210,10 @@ func (m *managerImpl) Deploy(ctx context.Context, repoPath string, namespace str
 		"deploy",
 		"--remote",
 		"--namespace", namespace,
-		"--registry", opts.Registry,
-		"--git-url", opts.GitUrl,
-		"--builder", opts.Builder,
 	}
 
 	if opts.RegistryAuthFile != "" {
 		deployArgs = append(deployArgs, "--registry-authfile", opts.RegistryAuthFile)
-	}
-
-	if opts.InsecureRegistry {
-		deployArgs = append(deployArgs, "--registry-insecure")
 	}
 
 	out, err := m.Run(ctx, repoPath, deployArgs...)

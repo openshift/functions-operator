@@ -114,7 +114,7 @@ var _ = Describe("Function Controller", func() {
 					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
 					funcMock.EXPECT().Deploy(mock.Anything, mock.Anything, resourceNamespace, funccli.DeployOptions{}).Return(nil)
 
-					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
 				},
 			}),
 			Entry("should skip deploy when middleware already up to date", reconcileTestCase{
@@ -128,7 +128,7 @@ var _ = Describe("Function Controller", func() {
 					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
 					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
 
-					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
 				},
 			}),
 			Entry("should use main as default branch", reconcileTestCase{
@@ -146,7 +146,7 @@ var _ = Describe("Function Controller", func() {
 					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
 					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
 
-					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
 				},
 			}),
 		)
@@ -178,5 +178,6 @@ func createTmpGitRepo(function functions.Function) *git.Repository {
 
 	return &git.Repository{
 		CloneDir: tempDir,
+		SubPath:  ".",
 	}
 }

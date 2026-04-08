@@ -145,7 +145,7 @@ func (r *FunctionReconciler) prepareSource(ctx context.Context, function *v1alph
 		}
 	}
 
-	repo, err := r.GitManager.CloneRepository(ctx, function.Spec.Repository.URL, branchReference, gitAuthSecret.Data)
+	repo, err := r.GitManager.CloneRepository(ctx, function.Spec.Repository.URL, function.Spec.Repository.Path, branchReference, gitAuthSecret.Data)
 	if err != nil {
 		function.MarkSourceNotReady("GitCloneFailed", "Failed to clone repository: %s", err.Error())
 		return nil, nil, fmt.Errorf("failed to setup git repository: %w", err)

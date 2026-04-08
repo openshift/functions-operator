@@ -133,6 +133,31 @@ The status will include:
 - Middleware update conditions
 - Whether the function needs rebuilding due to outdated middleware
 
+## Advanced Use Cases
+
+### Functions in Monorepos
+
+For functions located in a subdirectory of a repository (e.g., in a monorepo), use the `repository.path` field to specify the path to your function:
+
+```yaml
+apiVersion: functions.dev/v1alpha1
+kind: Function
+metadata:
+  name: my-function
+  namespace: default
+spec:
+  repository:
+    url: https://github.com/your-org/your-monorepo.git
+    path: functions/my-function
+    authSecretRef:
+      name: git-credentials
+  registry:
+    authSecretRef:
+      name: registry-credentials
+```
+
+The operator will clone the repository and use the specified path as the function root directory.
+
 ## Development
 
 ### Local Development Cluster

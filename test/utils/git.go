@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -33,24 +34,31 @@ func buildAuthURL(repoURL, username, password string) string {
 
 // InitializeRepoWithFunction creates a function project and pushes it to the Gitea repo
 func InitializeRepoWithFunction(repoURL, username, password, language string) (string, error) {
-	return InitializeRepoWithFunctionVersion(repoURL, username, password, language, "")
+	return InitializeRepoWithFunctionVersion(repoURL, ".", username, password, language, "")
+}
+
+// InitializeRepoWithFunctionInSubDir creates a function project in a repos subdirectory and pushes it to the Gitea repo
+func InitializeRepoWithFunctionInSubDir(repoURL, subDir, username, password, language string) (string, error) {
+	return InitializeRepoWithFunctionVersion(repoURL, subDir, username, password, language, "")
 }
 
 // InitializeRepoWithFunctionVersion creates a function project with a specific func CLI version
 // If version is empty, uses the current func CLI
-func InitializeRepoWithFunctionVersion(repoURL, username, password, language, version string) (string, error) {
+func InitializeRepoWithFunctionVersion(repoURL, subdir, username, password, language, version string) (string, error) {
 	repoDir := fmt.Sprintf("%s/func-test-%s", os.TempDir(), rand.String(10))
 
 	// Build authenticated URL
 	authURL := buildAuthURL(repoURL, username, password)
 
+	functionPath := filepath.Join(repoDir, subdir)
+
 	// Initialize function (func init creates the directory)
 	if version == "" {
-		if _, err := RunFunc("init", "-l", language, repoDir); err != nil {
+		if _, err := RunFunc("init", "-l", language, functionPath); err != nil {
 			return "", fmt.Errorf("failed to init function: %w", err)
 		}
 	} else {
-		if _, err := RunFuncWithVersion(version, "init", "-l", language, repoDir); err != nil {
+		if _, err := RunFuncWithVersion(version, "init", "-l", language, functionPath); err != nil {
 			return "", fmt.Errorf("failed to init function: %w", err)
 		}
 	}

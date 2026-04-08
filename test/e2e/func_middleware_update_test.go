@@ -67,7 +67,7 @@ var _ = Describe("Middleware Update", func() {
 			// Initialize repository with function code using OLD func CLI version
 			// v1.20.1 has no middleware-version label and uses instance-compatible templates
 			oldFuncVersion := "v1.20.1"
-			repoDir, err = utils.InitializeRepoWithFunctionVersion(repoURL, username, password, "go", oldFuncVersion)
+			repoDir, err = utils.InitializeRepoWithFunctionVersion(repoURL, ".", username, password, "go", oldFuncVersion)
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(os.RemoveAll, repoDir)
 

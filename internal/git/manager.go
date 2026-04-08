@@ -20,7 +20,7 @@ const (
 )
 
 type Manager interface {
-	CloneRepository(ctx context.Context, url, reference string, auth map[string][]byte) (*Repository, error)
+	CloneRepository(ctx context.Context, url, subPath, reference string, auth map[string][]byte) (*Repository, error)
 }
 
 func NewManager() Manager {
@@ -29,7 +29,7 @@ func NewManager() Manager {
 
 type managerImpl struct{}
 
-func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, reference string, auth map[string][]byte) (*Repository, error) {
+func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, reference string, auth map[string][]byte) (*Repository, error) {
 	timer := prometheus.NewTimer(monitoring.GitCloneDuration)
 	defer timer.ObserveDuration()
 
@@ -57,6 +57,7 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, reference st
 
 	return &Repository{
 		CloneDir: targetDir,
+		SubPath:  subPath,
 	}, nil
 }
 

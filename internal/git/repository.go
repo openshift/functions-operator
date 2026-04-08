@@ -2,14 +2,16 @@ package git
 
 import (
 	"os"
+	"path"
 )
 
 type Repository struct {
 	CloneDir string
+	SubPath  string
 }
 
 func (r *Repository) Path() string {
-	return r.CloneDir
+	return path.Join(r.CloneDir, r.SubPath)
 }
 
 func (r *Repository) Cleanup() error {

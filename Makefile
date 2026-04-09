@@ -239,6 +239,9 @@ undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.
 create-kind-cluster:
 	./hack/create-kind-cluster.sh
 
+.PHONY: update-codegen
+update-codegen: generate manifests gen-mocks
+
 ##@ Dependencies
 
 ## Location to install dependencies to

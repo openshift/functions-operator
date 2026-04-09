@@ -311,21 +311,7 @@ func CreateFunctionAndWaitForReady(testNs TestNamespace) {
 	err := k8sClient.Create(ctx, function)
 	Expect(err).NotTo(HaveOccurred())
 
-	funcBecomeReady := func(g Gomega) {
-		fn := &functionsdevv1alpha1.Function{}
-		err := k8sClient.Get(ctx, types.NamespacedName{Name: function.Name, Namespace: function.Namespace}, fn)
-		g.Expect(err).NotTo(HaveOccurred())
-
-		for _, cond := range fn.Status.Conditions {
-			if cond.Type == functionsdevv1alpha1.TypeReady {
-				g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-				return
-			}
-		}
-		g.Expect(false).To(BeTrue(), "Ready condition not found")
-	}
-
-	Eventually(funcBecomeReady, 5*time.Minute).Should(Succeed())
+	Eventually(functionBecomesReady(function.Name, function.Namespace), 5*time.Minute).Should(Succeed())
 }
 
 func CreateFunctionAndWaitForConsistentlyNotReconciled(testNs TestNamespace) {

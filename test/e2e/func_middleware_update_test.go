@@ -31,7 +31,6 @@ import (
 	. "github.com/onsi/gomega"
 	"gopkg.in/yaml.v3"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	funcfn "knative.dev/func/pkg/functions"
 )
 
@@ -185,22 +184,8 @@ var _ = Describe("Middleware Update", func() {
 
 			functionName = fn.Name
 
-			funcBecomeReady := func(g Gomega) {
-				f := &functionsdevv1alpha1.Function{}
-				err := k8sClient.Get(ctx, types.NamespacedName{Name: fn.Name, Namespace: fn.Namespace}, f)
-				g.Expect(err).NotTo(HaveOccurred())
-
-				for _, cond := range f.Status.Conditions {
-					if cond.Type == functionsdevv1alpha1.TypeReady {
-						g.Expect(cond.Status).To(Equal(metav1.ConditionTrue))
-						return
-					}
-				}
-				g.Expect(false).To(BeTrue(), "Ready condition not found")
-			}
-
 			// Middleware update could take a bit longer therefore give more time
-			Eventually(funcBecomeReady, 6*time.Minute).Should(Succeed())
+			Eventually(functionBecomesReady(functionName, functionNamespace), 6*time.Minute).Should(Succeed())
 
 			// Verify middleware was actually updated by inspecting the new image
 			out, err = utils.RunFunc("describe", deployedFunctionName, "-n", functionNamespace, "-o", "yaml")
@@ -250,21 +235,7 @@ var _ = Describe("Middleware Update", func() {
 			// The operator should have set a middleware version
 			Expect(updatedMiddlewareVersion).NotTo(BeEmpty(), "Operator should have deployed with middleware-version label set")
 
-			// Verify MiddlewareUpToDate condition is True
-			updatedFunction := &functionsdevv1alpha1.Function{}
-			err = k8sClient.Get(ctx, types.NamespacedName{Name: fn.Name, Namespace: fn.Namespace}, updatedFunction)
-			Expect(err).NotTo(HaveOccurred())
-
-			var middlewareUpToDate bool
-			for _, cond := range updatedFunction.Status.Conditions {
-				if cond.Type == functionsdevv1alpha1.TypeMiddlewareUpToDate {
-					middlewareUpToDate = cond.Status == metav1.ConditionTrue
-					_, _ = fmt.Fprintf(GinkgoWriter, "MiddlewareUpToDate condition: status=%s, reason=%s\n",
-						cond.Status, cond.Reason)
-					break
-				}
-			}
-			Expect(middlewareUpToDate).To(BeTrue(), "MiddlewareUpToDate condition should be True")
+			Eventually(functionMiddlewareUpToDate(functionName, functionNamespace), 2*time.Minute).Should(Succeed())
 		})
 	})
 })

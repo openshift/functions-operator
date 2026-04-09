@@ -183,9 +183,10 @@ func (g *GiteaClient) CreateAccessToken(username, password, tokenName string) (s
 		return "", fmt.Errorf("failed to create user client: %w", err)
 	}
 
-	// Create token
+	// Create token with all scopes
 	token, _, err := userClient.CreateAccessToken(gitea.CreateAccessTokenOption{
-		Name: tokenName,
+		Name:   tokenName,
+		Scopes: []gitea.AccessTokenScope{gitea.AccessTokenScopeAll},
 	})
 	if err != nil {
 		return "", fmt.Errorf("failed to create access token for %s: %w", username, err)

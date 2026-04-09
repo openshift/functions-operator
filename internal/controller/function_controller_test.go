@@ -75,6 +75,7 @@ var _ = Describe("Function Controller", func() {
 		type reconcileTestCase struct {
 			spec           functionsdevv1alpha1.FunctionSpec
 			configureMocks func(*funccli.MockManager, *git.MockManager)
+			statusChecks   func(*functionsdevv1alpha1.FunctionStatus)
 		}
 
 		DescribeTable("should successfully reconcile the resource",
@@ -101,6 +102,14 @@ var _ = Describe("Function Controller", func() {
 					NamespacedName: typeNamespacedName,
 				})
 				Expect(err).NotTo(HaveOccurred())
+
+				if tc.statusChecks != nil {
+					f := &functionsdevv1alpha1.Function{}
+					err := k8sClient.Get(ctx, typeNamespacedName, f)
+					Expect(err).NotTo(HaveOccurred())
+
+					tc.statusChecks(&f.Status)
+				}
 			},
 			Entry("should deploy when middleware update required", reconcileTestCase{
 				spec: defaultSpec,
@@ -149,6 +158,30 @@ var _ = Describe("Function Controller", func() {
 					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
 				},
 			}),
+
+			Entry("should contain the git information in the status", reconcileTestCase{
+				spec: functionsdevv1alpha1.FunctionSpec{
+					Repository: functionsdevv1alpha1.FunctionSpecRepository{
+						URL:    "https://github.com/foo/bar",
+						Branch: "my-branch",
+					},
+				},
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}, WithRepoOptionBranch("my-branch"), WithRepoOptionCommit("foobar")), nil)
+				},
+				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
+					Expect(status.Git.ResolvedBranch).Should(Equal("my-branch"))
+					Expect(status.Git.ObservedCommit).Should(Equal("foobar"))
+				},
+			}),
 		)
 	})
 })
@@ -165,7 +198,9 @@ func createFunctionResource(name, namespace string, spec functionsdevv1alpha1.Fu
 	return k8sClient.Create(ctx, &resource)
 }
 
-func createTmpGitRepo(function functions.Function) *git.Repository {
+type RepoOption func(*git.Repository)
+
+func createTmpGitRepo(function functions.Function, repoOptions ...RepoOption) *git.Repository {
 	tempDir, err := os.MkdirTemp("", function.Name)
 	Expect(err).NotTo(HaveOccurred())
 
@@ -176,8 +211,31 @@ func createTmpGitRepo(function functions.Function) *git.Repository {
 	err = os.WriteFile(funcYamlPath, f, 0644)
 	Expect(err).NotTo(HaveOccurred())
 
-	return &git.Repository{
+	opts := &git.Repository{
 		CloneDir: tempDir,
-		SubPath:  ".",
+	}
+
+	for _, repoOption := range repoOptions {
+		repoOption(opts)
+	}
+
+	return opts
+}
+
+func WithRepoOptionSubPath(subPath string) RepoOption {
+	return func(repo *git.Repository) {
+		repo.SubPath = subPath
+	}
+}
+
+func WithRepoOptionBranch(branch string) RepoOption {
+	return func(repo *git.Repository) {
+		repo.Branch = branch
+	}
+}
+
+func WithRepoOptionCommit(commit string) RepoOption {
+	return func(repo *git.Repository) {
+		repo.Commit = commit
 	}
 }

@@ -121,6 +121,8 @@ func (r *FunctionReconciler) reconcile(ctx context.Context, function *v1alpha1.F
 	}
 	defer repo.Cleanup()
 
+	r.updateFunctionStatusGit(function, repo)
+
 	if err := r.ensureDeployment(ctx, function, repo, metadata); err != nil {
 		return fmt.Errorf("deploying function failed: %w", err)
 	}
@@ -441,4 +443,11 @@ func (r *FunctionReconciler) isMiddlewareLatest(ctx context.Context, metadata *f
 	}
 
 	return latestMiddleware == functionMiddleware, nil
+}
+
+// updateFunctionStatusGit updates the functions status with the Git information
+func (r *FunctionReconciler) updateFunctionStatusGit(function *v1alpha1.Function, repo *git.Repository) {
+	function.Status.Git.ResolvedBranch = repo.Branch
+	function.Status.Git.ObservedCommit = repo.Commit
+	function.Status.Git.LastChecked = metav1.Now()
 }

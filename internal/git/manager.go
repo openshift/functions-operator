@@ -44,7 +44,7 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
-	_, err = git.PlainCloneContext(ctx, targetDir, &git.CloneOptions{
+	repo, err := git.PlainCloneContext(ctx, targetDir, &git.CloneOptions{
 		URL:           repoUrl,
 		ReferenceName: plumbing.ReferenceName(reference),
 		SingleBranch:  true,
@@ -55,9 +55,16 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 		return nil, fmt.Errorf("failed to clone repo: %w", err)
 	}
 
+	head, err := repo.Head()
+	if err != nil {
+		return nil, fmt.Errorf("failed to find head: %w", err)
+	}
+
 	return &Repository{
 		CloneDir: targetDir,
 		SubPath:  subPath,
+		Commit:   head.Hash().String(),
+		Branch:   reference,
 	}, nil
 }
 

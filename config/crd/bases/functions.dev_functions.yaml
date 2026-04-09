@@ -165,6 +165,16 @@ spec:
                   - type
                   type: object
                 type: array
+              git:
+                properties:
+                  lastChecked:
+                    format: date-time
+                    type: string
+                  observedCommit:
+                    type: string
+                  resolvedBranch:
+                    type: string
+                type: object
               name:
                 type: string
               runtime:

@@ -77,6 +77,14 @@ type FunctionStatus struct {
 	Runtime string `json:"runtime"`
 
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
+
+	Git FunctionStatusGit `json:"git,omitempty"`
+}
+
+type FunctionStatusGit struct {
+	ResolvedBranch string      `json:"resolvedBranch,omitempty"`
+	ObservedCommit string      `json:"observedCommit,omitempty"`
+	LastChecked    metav1.Time `json:"lastChecked,omitempty"`
 }
 
 // +kubebuilder:object:root=true

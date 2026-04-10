@@ -62,7 +62,11 @@ var _ = Describe("Bundle", Label("bundle"), Ordered, func() {
 			By("Collecting logs from deployed operators")
 			for _, testNs := range testNamespaces {
 				By("Logs from operator in namespace " + testNs.Name)
-				cmd := exec.Command("kubectl", "logs", "-l", "control-plane=controller-manager", "--namespace", testNs.Name)
+				cmd := exec.Command(
+					"kubectl", "logs",
+					"-l", "control-plane=controller-manager",
+					"--namespace", testNs.Name,
+					"-t", "-1")
 				controllerLogs, err := utils.Run(cmd)
 				if err == nil {
 					_, _ = fmt.Fprintf(GinkgoWriter, "Controller logs:\n %s", controllerLogs)

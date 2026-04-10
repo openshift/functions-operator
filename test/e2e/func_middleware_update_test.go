@@ -76,11 +76,9 @@ var _ = Describe("Middleware Update", func() {
 			DeferCleanup(os.RemoveAll, repoDir)
 
 			// Deploy function using the same OLD func CLI version
-			out, err := utils.RunFuncWithVersion(oldFuncVersion, "deploy",
-				"--namespace", functionNamespace,
-				"--path", repoDir,
-				"--registry", utils.Registry(),
-				fmt.Sprintf("--registry-insecure=%t", utils.IsRegistryInsecure()))
+			out, err := utils.RunFuncDeploy(repoDir,
+				utils.WithNamespace(functionNamespace),
+				utils.WithDeployCliVersion(oldFuncVersion))
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 

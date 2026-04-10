@@ -33,12 +33,27 @@ func RunFunc(command string, args ...string) (string, error) {
 	return Run(cmd)
 }
 
+// RunFuncWithVersion executes the func CLI with a specific version
+// It downloads and caches the version if not already present
+func RunFuncWithVersion(version string, command string, args ...string) (string, error) {
+	funcBinary, err := ensureFuncVersion(version)
+	if err != nil {
+		return "", err
+	}
+
+	allArgs := append([]string{command}, args...)
+	cmd := exec.Command(funcBinary, allArgs...)
+	return Run(cmd)
+}
+
 // RunFuncDeploy runs func deploy
 func RunFuncDeploy(functionDir string, optFns ...FuncDeployOption) (string, error) {
 	opts := &FuncDeployOptions{
 		// defaults
 		Registry:         Registry(),
 		RegistryInsecure: IsRegistryInsecure(),
+		Builder:          os.Getenv("DEFAULT_BUILDER"),
+		Deployer:         os.Getenv("DEFAULT_DEPLOYER"),
 	}
 
 	for _, optFn := range optFns {
@@ -63,20 +78,11 @@ func RunFuncDeploy(functionDir string, optFns ...FuncDeployOption) (string, erro
 		args = append(args, "--deployer", opts.Deployer)
 	}
 
-	return RunFunc("deploy", args...)
-}
-
-// RunFuncWithVersion executes the func CLI with a specific version
-// It downloads and caches the version if not already present
-func RunFuncWithVersion(version string, command string, args ...string) (string, error) {
-	funcBinary, err := ensureFuncVersion(version)
-	if err != nil {
-		return "", err
+	if opts.CliVersion != "" {
+		return RunFuncWithVersion(opts.CliVersion, "deploy", args...)
 	}
 
-	allArgs := append([]string{command}, args...)
-	cmd := exec.Command(funcBinary, allArgs...)
-	return Run(cmd)
+	return RunFunc("deploy", args...)
 }
 
 type FuncDeployOptions struct {
@@ -85,6 +91,7 @@ type FuncDeployOptions struct {
 	Namespace        string
 	Builder          string
 	Deployer         string
+	CliVersion       string
 }
 
 type FuncDeployOption func(*FuncDeployOptions)
@@ -104,6 +111,12 @@ func WithBuilder(builder string) FuncDeployOption {
 func WithDeployer(deployer string) FuncDeployOption {
 	return func(o *FuncDeployOptions) {
 		o.Deployer = deployer
+	}
+}
+
+func WithDeployCliVersion(version string) FuncDeployOption {
+	return func(opts *FuncDeployOptions) {
+		opts.CliVersion = version
 	}
 }
 

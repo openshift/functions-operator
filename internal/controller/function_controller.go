@@ -61,7 +61,7 @@ type FunctionReconciler struct {
 // +kubebuilder:rbac:groups=functions.dev,resources=functions/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=functions.dev,resources=functions/finalizers,verbs=update
 // +kubebuilder:rbac:groups="",resources=pods;pods/attach;secrets;services;persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
-// +kubebuilder:rbac:groups="apps",resources=deployments,verbs=get;list;watch;create;update;patch;delete
+// +kubebuilder:rbac:groups="apps",resources=deployments;replicasets,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="serving.knative.dev",resources=services;routes,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups="eventing.knative.dev",resources=triggers,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=tekton.dev,resources=pipelines;pipelineruns,verbs=get;list;watch;create;update;patch;delete
@@ -249,6 +249,7 @@ func (r *FunctionReconciler) setupPipelineRBAC(ctx context.Context, function *v1
 func (r *FunctionReconciler) ensureDeployFunctionRole(ctx context.Context, namespace string) error {
 	logger := log.FromContext(ctx)
 
+	// TODO: only add the rules which are needed for the functions deployer
 	expectedRole := &rbacv1.Role{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      deployFunctionRoleName,
@@ -258,6 +259,22 @@ func (r *FunctionReconciler) ensureDeployFunctionRole(ctx context.Context, names
 			{
 				APIGroups: []string{"serving.knative.dev"},
 				Resources: []string{"services", "routes"},
+				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
+			}, {
+				APIGroups: []string{"eventing.knative.dev"},
+				Resources: []string{"triggers"},
+				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
+			}, {
+				APIGroups: []string{"apps"},
+				Resources: []string{"deployments", "replicasets"},
+				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
+			}, {
+				APIGroups: []string{""},
+				Resources: []string{"services", "pods"},
+				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
+			}, {
+				APIGroups: []string{"http.keda.sh"},
+				Resources: []string{"httpscaledobjects"},
 				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
 			},
 		},

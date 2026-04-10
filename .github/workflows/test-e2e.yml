@@ -11,8 +11,13 @@ concurrency:
 
 jobs:
   test-e2e:
-    name: E2E Tests
+    name: E2E Tests (${{ matrix.builder }}/${{ matrix.deployer }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        builder: [pack, s2i]
+        deployer: [knative, raw, keda]
     steps:
       - name: Clone the code
         uses: actions/checkout@v4
@@ -50,4 +55,21 @@ jobs:
         env:
           REGISTRY_INSECURE: true
           REGISTRY: kind-registry:5000
+          DEFAULT_BUILDER: ${{ matrix.builder }}
+          DEFAULT_DEPLOYER: ${{ matrix.deployer }}
         run: make test-e2e
+
+      - name: Collect Kubernetes artifacts
+        if: failure()
+        run: |
+          mkdir -p /tmp/k8s-artifacts
+          kubectl logs -n func-operator-system -l control-plane=controller-manager --tail=-1 --all-containers --prefix --timestamps > /tmp/k8s-artifacts/func-operator.log
+          kubectl get functions -A -o yaml > /tmp/functions.yaml
+
+      - name: Upload Kubernetes artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: func-operator-logs-${{ matrix.builder }}-${{ matrix.deployer }}
+          path: /tmp/k8s-artifacts/
+          retention-days: 7

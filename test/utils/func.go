@@ -33,6 +33,39 @@ func RunFunc(command string, args ...string) (string, error) {
 	return Run(cmd)
 }
 
+// RunFuncDeploy runs func deploy
+func RunFuncDeploy(functionDir string, optFns ...FuncDeployOption) (string, error) {
+	opts := &FuncDeployOptions{
+		// defaults
+		Registry:         Registry(),
+		RegistryInsecure: IsRegistryInsecure(),
+	}
+
+	for _, optFn := range optFns {
+		optFn(opts)
+	}
+
+	args := []string{
+		"--path", functionDir,
+		"--registry", opts.Registry,
+		fmt.Sprintf("--registry-insecure=%t", opts.RegistryInsecure),
+	}
+
+	if opts.Namespace != "" {
+		args = append(args, "--namespace", opts.Namespace)
+	}
+
+	if opts.Builder != "" {
+		args = append(args, "--builder", opts.Builder)
+	}
+
+	if opts.Deployer != "" {
+		args = append(args, "--deployer", opts.Deployer)
+	}
+
+	return RunFunc("deploy", args...)
+}
+
 // RunFuncWithVersion executes the func CLI with a specific version
 // It downloads and caches the version if not already present
 func RunFuncWithVersion(version string, command string, args ...string) (string, error) {
@@ -44,6 +77,34 @@ func RunFuncWithVersion(version string, command string, args ...string) (string,
 	allArgs := append([]string{command}, args...)
 	cmd := exec.Command(funcBinary, allArgs...)
 	return Run(cmd)
+}
+
+type FuncDeployOptions struct {
+	Registry         string
+	RegistryInsecure bool
+	Namespace        string
+	Builder          string
+	Deployer         string
+}
+
+type FuncDeployOption func(*FuncDeployOptions)
+
+func WithNamespace(namespace string) FuncDeployOption {
+	return func(opts *FuncDeployOptions) {
+		opts.Namespace = namespace
+	}
+}
+
+func WithBuilder(builder string) FuncDeployOption {
+	return func(o *FuncDeployOptions) {
+		o.Builder = builder
+	}
+}
+
+func WithDeployer(deployer string) FuncDeployOption {
+	return func(o *FuncDeployOptions) {
+		o.Deployer = deployer
+	}
 }
 
 // ensureFuncVersion ensures the specified func version is available and returns its path

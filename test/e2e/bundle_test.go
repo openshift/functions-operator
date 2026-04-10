@@ -91,7 +91,7 @@ var _ = Describe("Bundle", Label("bundle"), Ordered, func() {
 			out, err := utils.OperatorSdkRun("run", "bundle",
 				"--namespace", testNamespaces[0].Name,
 				"--install-mode", "OwnNamespace",
-				fmt.Sprintf("--skip-tls-verify=%v", registryInsecure),
+				fmt.Sprintf("--skip-tls-verify=%v", utils.IsRegistryInsecure()),
 				bundleImage)
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
@@ -129,7 +129,7 @@ var _ = Describe("Bundle", Label("bundle"), Ordered, func() {
 			out, err := utils.OperatorSdkRun("run", "bundle",
 				"--namespace", testNamespaces[0].Name,
 				"--install-mode", fmt.Sprintf("SingleNamespace=%s", testNamespaces[1].Name),
-				fmt.Sprintf("--skip-tls-verify=%v", registryInsecure),
+				fmt.Sprintf("--skip-tls-verify=%v", utils.IsRegistryInsecure()),
 				bundleImage)
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
@@ -169,7 +169,7 @@ var _ = Describe("Bundle", Label("bundle"), Ordered, func() {
 			out, err := utils.OperatorSdkRun("run", "bundle",
 				"--namespace", testNamespaces[0].Name,
 				"--install-mode", fmt.Sprintf("MultiNamespace=%s,%s", testNamespaces[1].Name, testNamespaces[2].Name),
-				fmt.Sprintf("--skip-tls-verify=%v", registryInsecure),
+				fmt.Sprintf("--skip-tls-verify=%v", utils.IsRegistryInsecure()),
 				bundleImage)
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
@@ -209,7 +209,7 @@ var _ = Describe("Bundle", Label("bundle"), Ordered, func() {
 			out, err := utils.OperatorSdkRun("run", "bundle",
 				"--namespace", testNamespaces[0].Name,
 				"--install-mode", fmt.Sprintf("SingleNamespace=%s", testNamespaces[1].Name),
-				fmt.Sprintf("--skip-tls-verify=%v", registryInsecure),
+				fmt.Sprintf("--skip-tls-verify=%v", utils.IsRegistryInsecure()),
 				bundleImage)
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
@@ -218,7 +218,7 @@ var _ = Describe("Bundle", Label("bundle"), Ordered, func() {
 			out, err = utils.OperatorSdkRun("run", "bundle",
 				"--namespace", testNamespaces[2].Name,
 				"--install-mode", fmt.Sprintf("SingleNamespace=%s", testNamespaces[3].Name),
-				fmt.Sprintf("--skip-tls-verify=%v", registryInsecure),
+				fmt.Sprintf("--skip-tls-verify=%v", utils.IsRegistryInsecure()),
 				bundleImage)
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
@@ -266,7 +266,7 @@ var _ = Describe("Bundle", Label("bundle"), Ordered, func() {
 			out, err := utils.OperatorSdkRun("run", "bundle",
 				"--namespace", testNamespaces[0].Name,
 				"--install-mode", "AllNamespaces",
-				fmt.Sprintf("--skip-tls-verify=%v", registryInsecure),
+				fmt.Sprintf("--skip-tls-verify=%v", utils.IsRegistryInsecure()),
 				bundleImage)
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
@@ -363,11 +363,7 @@ func createNamespaceAndDeployFunction() TestNamespace {
 	DeferCleanup(os.RemoveAll, repoDir)
 
 	// Deploy function
-	out, err := utils.RunFunc("deploy",
-		"--namespace", ns,
-		"--path", repoDir,
-		"--registry", registry,
-		fmt.Sprintf("--registry-insecure=%t", registryInsecure))
+	out, err := utils.RunFuncDeploy(repoDir, utils.WithNamespace(ns))
 	Expect(err).NotTo(HaveOccurred())
 	_, _ = fmt.Fprint(GinkgoWriter, out)
 

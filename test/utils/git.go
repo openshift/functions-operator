@@ -32,33 +32,45 @@ func buildAuthURL(repoURL, username, password string) string {
 		fmt.Sprintf("http://%s:%s@", username, password), 1)
 }
 
+type RepoOptions struct {
+	SubDir     string
+	CliVersion string
+}
+
+type RepoOption func(*RepoOptions)
+
+func WithSubDir(subDir string) RepoOption {
+	return func(o *RepoOptions) {
+		o.SubDir = subDir
+	}
+}
+func WithCliVersion(cliVersion string) RepoOption {
+	return func(o *RepoOptions) {
+		o.CliVersion = cliVersion
+	}
+}
+
 // InitializeRepoWithFunction creates a function project and pushes it to the Gitea repo
-func InitializeRepoWithFunction(repoURL, username, password, language string) (string, error) {
-	return InitializeRepoWithFunctionVersion(repoURL, ".", username, password, language, "")
-}
+func InitializeRepoWithFunction(repoURL, username, password, language string, optFns ...RepoOption) (string, error) {
+	opts := &RepoOptions{}
+	for _, fn := range optFns {
+		fn(opts)
+	}
 
-// InitializeRepoWithFunctionInSubDir creates a function project in a repos subdirectory and pushes it to the Gitea repo
-func InitializeRepoWithFunctionInSubDir(repoURL, subDir, username, password, language string) (string, error) {
-	return InitializeRepoWithFunctionVersion(repoURL, subDir, username, password, language, "")
-}
-
-// InitializeRepoWithFunctionVersion creates a function project with a specific func CLI version
-// If version is empty, uses the current func CLI
-func InitializeRepoWithFunctionVersion(repoURL, subdir, username, password, language, version string) (string, error) {
 	repoDir := fmt.Sprintf("%s/func-test-%s", os.TempDir(), rand.String(10))
 
 	// Build authenticated URL
 	authURL := buildAuthURL(repoURL, username, password)
 
-	functionPath := filepath.Join(repoDir, subdir)
+	functionPath := filepath.Join(repoDir, opts.SubDir)
 
 	// Initialize function (func init creates the directory)
-	if version == "" {
+	if opts.CliVersion == "" {
 		if _, err := RunFunc("init", "-l", language, functionPath); err != nil {
 			return "", fmt.Errorf("failed to init function: %w", err)
 		}
 	} else {
-		if _, err := RunFuncWithVersion(version, "init", "-l", language, functionPath); err != nil {
+		if _, err := RunFuncWithVersion(opts.CliVersion, "init", "-l", language, functionPath); err != nil {
 			return "", fmt.Errorf("failed to init function: %w", err)
 		}
 	}

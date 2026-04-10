@@ -154,11 +154,7 @@ var _ = Describe("Operator", func() {
 			DeferCleanup(cleanupNamespaces, functionNamespace)
 
 			// Deploy function using func CLI
-			out, err := utils.RunFunc("deploy",
-				"--namespace", functionNamespace,
-				"--path", repoDir,
-				"--registry", registry,
-				fmt.Sprintf("--registry-insecure=%t", registryInsecure))
+			out, err := utils.RunFuncDeploy(repoDir, utils.WithNamespace(functionNamespace))
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 
@@ -223,7 +219,12 @@ var _ = Describe("Operator", func() {
 			DeferCleanup(cleanup)
 
 			// Initialize repository with function code
-			repoDir, err = utils.InitializeRepoWithFunctionInSubDir(repoURL, subPath, username, password, "go")
+			repoDir, err = utils.InitializeRepoWithFunction(
+				repoURL,
+				username,
+				password,
+				"go",
+				utils.WithSubDir(subPath))
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(os.RemoveAll, repoDir)
 
@@ -234,11 +235,7 @@ var _ = Describe("Operator", func() {
 			functionDir := filepath.Join(repoDir, subPath)
 
 			// Deploy function using func CLI
-			out, err := utils.RunFunc("deploy",
-				"--namespace", functionNamespace,
-				"--path", functionDir,
-				"--registry", registry,
-				fmt.Sprintf("--registry-insecure=%t", registryInsecure))
+			out, err := utils.RunFuncDeploy(functionDir, utils.WithNamespace(functionNamespace))
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 
@@ -378,11 +375,7 @@ var _ = Describe("Operator", func() {
 			DeferCleanup(cleanupNamespaces, functionNamespace)
 
 			// Deploy function using func CLI
-			out, err := utils.RunFunc("deploy",
-				"--namespace", functionNamespace,
-				"--path", repoDir,
-				"--registry", registry,
-				fmt.Sprintf("--registry-insecure=%t", registryInsecure))
+			out, err := utils.RunFuncDeploy(repoDir, utils.WithNamespace(functionNamespace))
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 

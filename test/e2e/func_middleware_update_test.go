@@ -66,7 +66,12 @@ var _ = Describe("Middleware Update", func() {
 			// Initialize repository with function code using OLD func CLI version
 			// v1.20.1 has no middleware-version label and uses instance-compatible templates
 			oldFuncVersion := "v1.20.1"
-			repoDir, err = utils.InitializeRepoWithFunctionVersion(repoURL, ".", username, password, "go", oldFuncVersion)
+			repoDir, err = utils.InitializeRepoWithFunction(
+				repoURL,
+				username,
+				password,
+				"go",
+				utils.WithCliVersion(oldFuncVersion))
 			Expect(err).NotTo(HaveOccurred())
 			DeferCleanup(os.RemoveAll, repoDir)
 
@@ -74,8 +79,8 @@ var _ = Describe("Middleware Update", func() {
 			out, err := utils.RunFuncWithVersion(oldFuncVersion, "deploy",
 				"--namespace", functionNamespace,
 				"--path", repoDir,
-				"--registry", registry,
-				fmt.Sprintf("--registry-insecure=%t", registryInsecure))
+				"--registry", utils.Registry(),
+				fmt.Sprintf("--registry-insecure=%t", utils.IsRegistryInsecure()))
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 

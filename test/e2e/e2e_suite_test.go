@@ -19,8 +19,6 @@ package e2e
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 	"testing"
 
 	. "github.com/onsi/ginkgo/v2"
@@ -36,9 +34,6 @@ import (
 var (
 	k8sClient client.Client
 	ctx       context.Context
-
-	registry         string
-	registryInsecure bool
 
 	repoProvider utils.RepositoryProvider
 )
@@ -71,17 +66,6 @@ var _ = BeforeSuite(func() {
 	k8sClient, err = client.New(cfg, client.Options{Scheme: scheme.Scheme})
 	Expect(err).NotTo(HaveOccurred())
 	Expect(k8sClient).NotTo(BeNil())
-
-	// Setup vars from env
-	registry = os.Getenv("REGISTRY")
-	if registry == "" {
-		registry = "kind-registry:5000"
-	}
-
-	registryInsecure = false
-	if sec := os.Getenv("REGISTRY_INSECURE"); strings.ToLower(sec) == "true" {
-		registryInsecure = true
-	}
 
 	// Initialize repository provider (Gitea)
 	repoProvider, err = utils.NewGiteaClient()

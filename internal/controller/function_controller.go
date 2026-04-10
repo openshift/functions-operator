@@ -91,15 +91,17 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	function := original.DeepCopy()
-	reconcileErr := r.reconcile(ctx, function)
-	function.CalculateReadyCondition()
 
-	// update status if required
-	if !equality.Semantic.DeepEqual(original.Status, function.Status) {
-		if err := r.Status().Update(ctx, function); err != nil {
-			logger.Error(err, "Unable to update Function status")
-			return ctrl.Result{}, err
-		}
+	// Create tracker and add to context
+	statusTracker := NewStatusTracker(r.Client, function)
+	ctx = WithStatusTracker(ctx, statusTracker)
+
+	reconcileErr := r.reconcile(ctx, function)
+
+	// Final flush at the end (handles ready condition calculation)
+	if err := statusTracker.Flush(ctx, function); err != nil {
+		logger.Error(err, "Unable to update Function status")
+		return ctrl.Result{}, err
 	}
 
 	if reconcileErr != nil {
@@ -122,12 +124,18 @@ func (r *FunctionReconciler) reconcile(ctx context.Context, function *v1alpha1.F
 	defer repo.Cleanup()
 
 	r.updateFunctionStatusGit(function, repo)
+	if err := FlushStatus(ctx, function); err != nil {
+		return fmt.Errorf("failed to update status: %w", err)
+	}
 
 	if err := r.ensureDeployment(ctx, function, repo, metadata); err != nil {
 		return fmt.Errorf("deploying function failed: %w", err)
 	}
 
 	r.updateFunctionStatus(function, metadata)
+	if err := FlushStatus(ctx, function); err != nil {
+		return fmt.Errorf("failed to update status: %w", err)
+	}
 
 	return nil
 }
@@ -199,6 +207,12 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 	if !isOnLatestMiddleware {
 		logger.Info("Function is not on latest middleware. Will redeploy")
 		function.MarkMiddlewareNotUpToDate("MiddlewareOutdated", "Middleware is outdated, redeploying")
+
+		// Checkpoint 2: Flush status before long deploy operation
+		if err := FlushStatus(ctx, function); err != nil {
+			logger.Error(err, "Failed to update status before redeployment")
+		}
+
 		if err := r.deploy(ctx, function, repo); err != nil {
 			function.MarkDeployNotReady("DeployFailed", "Redeployment failed: %s", err.Error())
 			return fmt.Errorf("failed to redeploy function: %w", err)

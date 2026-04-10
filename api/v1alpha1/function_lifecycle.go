@@ -52,11 +52,25 @@ func (f *Function) CalculateReadyCondition() {
 	reason := ""
 	message := ""
 	for _, condition := range f.Status.Conditions {
-		if condition.Type != TypeReady && condition.Status == metav1.ConditionFalse {
-			allReady = false
-			reason = condition.Reason
-			message = condition.Message
-			continue
+		if condition.Type != TypeReady {
+			if condition.Status == metav1.ConditionFalse {
+				allReady = false
+				reason = condition.Reason
+				message = condition.Message
+				continue
+			} else if condition.Status == metav1.ConditionUnknown {
+				allReady = false
+
+				// override reason & message only if not set already
+				// (e.g. if set by a ConditionFalse as this takes preference)
+				if reason == "" {
+					reason = condition.Reason
+				}
+				if message == "" {
+					message = condition.Message
+				}
+				continue
+			}
 		}
 	}
 

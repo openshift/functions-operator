@@ -123,16 +123,12 @@ func (r *FunctionReconciler) reconcile(ctx context.Context, function *v1alpha1.F
 	}
 	defer repo.Cleanup()
 
-	r.updateFunctionStatusGit(function, repo)
-	if err := FlushStatus(ctx, function); err != nil {
-		return fmt.Errorf("failed to update status: %w", err)
-	}
+	function.Status.Name = metadata.Name
 
 	if err := r.ensureDeployment(ctx, function, repo, metadata); err != nil {
 		return fmt.Errorf("deploying function failed: %w", err)
 	}
 
-	r.updateFunctionStatus(function, metadata)
 	if err := FlushStatus(ctx, function); err != nil {
 		return fmt.Errorf("failed to update status: %w", err)
 	}
@@ -170,6 +166,10 @@ func (r *FunctionReconciler) prepareSource(ctx context.Context, function *v1alph
 	// Source is ready - git clone and metadata read succeeded
 	function.MarkSourceReady()
 
+	function.Status.Git.ResolvedBranch = repo.Branch
+	function.Status.Git.ObservedCommit = repo.Commit
+	function.Status.Git.LastChecked = metav1.Now()
+
 	return repo, &metadata, nil
 }
 
@@ -190,6 +190,15 @@ func (r *FunctionReconciler) ensureDeployment(ctx context.Context, function *v1a
 		return nil
 	}
 
+	// function is deployed -> update status with metadata information
+	deployer := metadata.Deploy.Deployer
+	if deployer == "" {
+		// knative is default deployer
+		deployer = "knative"
+	}
+	function.Status.Deployment.Deployer = deployer
+	function.Status.Deployment.Runtime = metadata.Runtime
+
 	// Function is deployed - check middleware version
 	return r.handleMiddlewareUpdate(ctx, function, repo, metadata)
 }
@@ -208,7 +217,14 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 		logger.Info("Function is not on latest middleware. Will redeploy")
 		function.MarkMiddlewareNotUpToDate("MiddlewareOutdated", "Middleware is outdated, redeploying")
 
-		// Checkpoint 2: Flush status before long deploy operation
+		// update function image in status before long redeploy operation
+		functionDescribe, err := r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
+		if err != nil {
+			return fmt.Errorf("failed to describe function to get image details: %w", err)
+		}
+		function.Status.Deployment.Image = functionDescribe.Image
+
+		// Flush status before long deploy operation
 		if err := FlushStatus(ctx, function); err != nil {
 			logger.Error(err, "Failed to update status before redeployment")
 		}
@@ -221,15 +237,15 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 		logger.Info("Function is deployed with latest middleware. No need to redeploy")
 	}
 
+	functionDescribe, err := r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to describe function to get image details: %w", err)
+	}
+	function.Status.Deployment.Image = functionDescribe.Image
+
 	function.MarkMiddlewareUpToDate()
 	function.MarkDeployReady()
 	return nil
-}
-
-// updateFunctionStatus updates the function status with current deployment information
-func (r *FunctionReconciler) updateFunctionStatus(function *v1alpha1.Function, metadata *funcfn.Function) {
-	function.Status.Name = metadata.Name
-	function.Status.Runtime = metadata.Runtime
 }
 
 func (r *FunctionReconciler) setupPipelineRBAC(ctx context.Context, function *v1alpha1.Function) error {
@@ -474,11 +490,4 @@ func (r *FunctionReconciler) isMiddlewareLatest(ctx context.Context, metadata *f
 	}
 
 	return latestMiddleware == functionMiddleware, nil
-}
-
-// updateFunctionStatusGit updates the functions status with the Git information
-func (r *FunctionReconciler) updateFunctionStatusGit(function *v1alpha1.Function, repo *git.Repository) {
-	function.Status.Git.ResolvedBranch = repo.Branch
-	function.Status.Git.ObservedCommit = repo.Commit
-	function.Status.Git.LastChecked = metav1.Now()
 }

@@ -182,6 +182,36 @@ var _ = Describe("Function Controller", func() {
 					Expect(status.Git.ObservedCommit).Should(Equal("foobar"))
 				},
 			}),
+
+			Entry("should contain the deployment information in the status", reconcileTestCase{
+				spec: functionsdevv1alpha1.FunctionSpec{
+					Repository: functionsdevv1alpha1.FunctionSpecRepository{
+						URL: "https://github.com/foo/bar",
+					},
+				},
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+						Image: "my-image:v1.2.3",
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{
+						Name:    "func-go",
+						Runtime: "node",
+						Deploy: functions.DeploySpec{
+							Deployer: "keda",
+						}}), nil)
+				},
+				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
+					Expect(status.Deployment.Image).Should(Equal("my-image:v1.2.3"))
+					Expect(status.Deployment.Deployer).Should(Equal("keda"))
+					Expect(status.Deployment.Runtime).Should(Equal("node"))
+				},
+			}),
 		)
 	})
 })

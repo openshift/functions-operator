@@ -95,6 +95,7 @@ func TestCalculateReadyCondition(t *testing.T) {
 			readyCondition := meta.FindStatusCondition(f.Status.Conditions, TypeReady)
 			if readyCondition == nil {
 				t.Fatal("Ready condition not found")
+				return
 			}
 
 			if readyCondition.Status != tt.expectedStatus {
@@ -149,6 +150,7 @@ func TestInitializeConditions(t *testing.T) {
 	readyCond := meta.FindStatusCondition(f.Status.Conditions, TypeReady)
 	if readyCond == nil {
 		t.Fatal("Ready condition not found")
+		return
 	}
 	if readyCond.Status != metav1.ConditionUnknown {
 		t.Errorf("Ready condition: expected status Unknown, got %v", readyCond.Status)

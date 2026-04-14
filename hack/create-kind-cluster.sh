@@ -12,11 +12,14 @@ NODE_VERSION="v1.34.0"
 REGISTRY_NAME="kind-registry"
 REGISTRY_PORT=${REGISTRY_PORT:-"5001"}
 
-SERVING_VERSION="v1.19.0"
-EVENTING_VERSION="v1.19.0"
-TEKTON_VERSION="v1.6.0"
-KEDA_VERSION="v2.17.0"
-KEDA_HTTP_ADDON_VERSION="v0.12.1"
+SERVING_VERSION="v1.21.0"
+EVENTING_VERSION="v1.21.0"
+TEKTON_VERSION="v1.11.0"
+KEDA_VERSION="v2.19.0"
+KEDA_HTTP_ADDON_VERSION="v0.13.0"
+
+GITEA_USER="giteaadmin"
+GITEA_PASS="giteapass"
 
 header=$'\e[1;33m'
 reset=$'\e[0m'
@@ -117,7 +120,7 @@ EOF
 
 function install_tekton() {
   header_text "Install Tekton"
-  kubectl apply -f https://storage.googleapis.com/tekton-releases/pipeline/previous/${TEKTON_VERSION}/release.yaml
+  kubectl apply -f https://infra.tekton.dev/tekton-releases/pipeline/previous/${TEKTON_VERSION}/release.yaml
   kubectl patch configmap feature-flags -n tekton-pipelines --type merge -p '{"data":{"coschedule":"disabled"}}'
 
   header_text "Waiting for Tekton to be ready..."
@@ -174,8 +177,8 @@ function install_gitea() {
     --set service.http.nodePort=30000 \
     --set service.ssh.type=NodePort \
     --set service.ssh.nodePort=30022 \
-    --set gitea.admin.username=giteaadmin \
-    --set gitea.admin.password=giteapass \
+    --set gitea.admin.username="${GITEA_USER}" \
+    --set gitea.admin.password="${GITEA_PASS}" \
     --set gitea.admin.email=admin@gitea.local \
     --set persistence.enabled=false \
     --set postgresql-ha.enabled=false \

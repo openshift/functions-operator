@@ -1,9 +1,9 @@
 module github.com/functions-dev/func-operator
 
-go 1.25.7
+go 1.26
 
 require (
-	code.gitea.io/sdk/gitea v0.23.2
+	code.gitea.io/sdk/gitea v0.24.1
 	github.com/go-git/go-git/v6 v6.0.0-20260317113930-fb0d09929504
 	github.com/go-logr/logr v1.4.3
 	github.com/onsi/ginkgo/v2 v2.28.1

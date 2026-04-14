@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -27,10 +28,13 @@ import (
 	. "github.com/onsi/gomega"
 	"github.com/stretchr/testify/mock"
 	"gopkg.in/yaml.v3"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/rand"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/utils/ptr"
 	"knative.dev/func/pkg/functions"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
@@ -76,6 +80,7 @@ var _ = Describe("Function Controller", func() {
 			spec           functionsdevv1alpha1.FunctionSpec
 			configureMocks func(*funccli.MockManager, *git.MockManager)
 			statusChecks   func(*functionsdevv1alpha1.FunctionStatus)
+			operatorConfig map[string]string
 		}
 
 		DescribeTable("should successfully reconcile the resource",
@@ -89,13 +94,24 @@ var _ = Describe("Function Controller", func() {
 				gitManagerMock := git.NewMockManager(GinkgoT())
 				tc.configureMocks(funcCliManagerMock, gitManagerMock)
 
+				operatorNamespace := fmt.Sprintf("func-operator-%s", rand.String(6))
+
+				By("Setting up the operator namespace")
+				err = createNamespace(operatorNamespace)
+				Expect(err).NotTo(HaveOccurred())
+
+				By("Setting up the controller config")
+				err = createControllerConfig(operatorNamespace, tc.operatorConfig)
+				Expect(err).NotTo(HaveOccurred())
+
 				By("Reconciling the created resource")
 				controllerReconciler := &FunctionReconciler{
-					Client:         k8sClient,
-					Scheme:         k8sClient.Scheme(),
-					Recorder:       &events.FakeRecorder{},
-					FuncCliManager: funcCliManagerMock,
-					GitManager:     gitManagerMock,
+					Client:            k8sClient,
+					Scheme:            k8sClient.Scheme(),
+					Recorder:          &events.FakeRecorder{},
+					FuncCliManager:    funcCliManagerMock,
+					GitManager:        gitManagerMock,
+					OperatorNamespace: operatorNamespace,
 				}
 
 				_, err = controllerReconciler.Reconcile(ctx, reconcile.Request{
@@ -182,7 +198,6 @@ var _ = Describe("Function Controller", func() {
 					Expect(status.Git.ObservedCommit).Should(Equal("foobar"))
 				},
 			}),
-
 			Entry("should contain the deployment information in the status", reconcileTestCase{
 				spec: functionsdevv1alpha1.FunctionSpec{
 					Repository: functionsdevv1alpha1.FunctionSpecRepository{
@@ -212,9 +227,77 @@ var _ = Describe("Function Controller", func() {
 					Expect(status.Deployment.Runtime).Should(Equal("node"))
 				},
 			}),
+			Entry("should skip middleware update, when config is disabled", reconcileTestCase{
+				spec: functionsdevv1alpha1.FunctionSpec{
+					Repository: functionsdevv1alpha1.FunctionSpecRepository{
+						URL: "https://github.com/foo/bar",
+					},
+					AutoUpdateMiddleware: nil,
+				},
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+						Image: "my-image:v1.2.3",
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v2.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+					// no funcMock.EXPECT().Deploy call, as no redeploy expected!
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				operatorConfig: map[string]string{
+					"autoUpdateMiddleware": "false",
+				},
+			}),
+			Entry("AutoUpdateMiddleware setting in function should take priority over operator config", reconcileTestCase{
+				spec: functionsdevv1alpha1.FunctionSpec{
+					Repository: functionsdevv1alpha1.FunctionSpecRepository{
+						URL: "https://github.com/foo/bar",
+					},
+					AutoUpdateMiddleware: ptr.To(false),
+				},
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+						Image: "my-image:v1.2.3",
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v2.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+					// no funcMock.EXPECT().Deploy call, as no redeploy expected!
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				operatorConfig: map[string]string{
+					"autoUpdateMiddleware": "true",
+				},
+			}),
 		)
 	})
 })
+
+func createControllerConfig(operatorNamespace string, config map[string]string) error {
+	cm := v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      controllerConfigName,
+			Namespace: operatorNamespace,
+		},
+		Data: config,
+	}
+
+	return k8sClient.Create(ctx, &cm)
+}
+
+func createNamespace(ns string) error {
+	return k8sClient.Create(ctx, &v1.Namespace{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: ns,
+		},
+	})
+}
 
 func createFunctionResource(name, namespace string, spec functionsdevv1alpha1.FunctionSpec) error {
 	resource := functionsdevv1alpha1.Function{

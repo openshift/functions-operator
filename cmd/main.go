@@ -28,9 +28,11 @@ import (
 	"github.com/functions-dev/func-operator/internal/git"
 	"github.com/functions-dev/func-operator/internal/monitoring"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
+	v1 "k8s.io/api/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -196,6 +198,12 @@ func main() {
 		})
 	}
 
+	operatorNamespace := os.Getenv("SYSTEM_NAMESPACE")
+	if operatorNamespace == "" {
+		setupLog.Info("Operator namespace not set, defaulting to func-operator-system")
+		operatorNamespace = "func-operator-system"
+	}
+
 	watchNamespaces := getWatchNamespaces()
 	var cacheOpts cache.Options
 	if len(watchNamespaces) > 0 {
@@ -208,6 +216,16 @@ func main() {
 		}
 	} else {
 		setupLog.Info("Operator watching all namespaces")
+	}
+
+	// Always watch ConfigMaps in the operator's namespace so it can access the controller-config ConfigMap,
+	// without affecting which namespaces Functions are watched in
+	cacheOpts.ByObject = map[client.Object]cache.ByObject{
+		&v1.ConfigMap{}: {
+			Namespaces: map[string]cache.Config{
+				operatorNamespace: {},
+			},
+		},
 	}
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -252,11 +270,12 @@ func main() {
 	setupLog.Info("Func CLI is ready")
 
 	if err := (&controller.FunctionReconciler{
-		Client:         mgr.GetClient(),
-		Scheme:         mgr.GetScheme(),
-		Recorder:       mgr.GetEventRecorder("functions-controller"),
-		FuncCliManager: funcCLIManager,
-		GitManager:     git.NewManager(),
+		Client:            mgr.GetClient(),
+		Scheme:            mgr.GetScheme(),
+		Recorder:          mgr.GetEventRecorder("functions-controller"),
+		FuncCliManager:    funcCLIManager,
+		GitManager:        git.NewManager(),
+		OperatorNamespace: operatorNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Function")
 		os.Exit(1)

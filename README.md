@@ -158,6 +158,42 @@ spec:
 
 The operator will clone the repository and use the specified path as the function root directory.
 
+### Configuring Automatic Middleware Updates
+
+The operators main responsibility it to rebuild functions when outdated middleware is detected. Anyhow this behavior can be enabled/disabled at two levels:
+
+#### Operator-Level Default
+
+Configure the operator-wide default by editing the `func-operator-controller-config` ConfigMap in the operators namespace (`func-operator-system` by default):
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: func-operator-controller-config
+  namespace: func-operator-system
+data:
+  autoUpdateMiddleware: "true"  # or "false" to disable by default
+```
+
+#### Per-Function Override
+
+Individual functions can override the operator default using the `autoUpdateMiddleware` field:
+
+```yaml
+apiVersion: functions.dev/v1alpha1
+kind: Function
+metadata:
+  name: my-function
+  namespace: default
+spec:
+  repository:
+    url: https://github.com/your-org/your-function.git
+  autoUpdateMiddleware: false  # Disable middleware updates for this function
+```
+
+**Precedence:** Function-level settings always take priority over the operator default.
+
 ## Development
 
 ### Local Development Cluster
@@ -243,7 +279,7 @@ make lint
 | `repository.path`           | string  | No       | Path to the function inside the repository. Defaults to "."                                      |
 | `repository.authSecretRef`  | object  | No       | Reference to the auth secret for private repository authentication                               |
 | `registry.authSecretRef`    | object  | No       | Reference to the secret containing credentials for registry authentication                       |
-| `autoUpdateMiddleware`      | boolean | No       | Defines if the operator should rebuild when outdated middleware is detected. Defaults to global operator config |
+| `autoUpdateMiddleware`      | boolean | No       | Defines if the operator should rebuild when outdated middleware is detected. When not specified, defaults to the operator-wide setting in the `func-operator-controller-config` ConfigMap (default: `true`). Function-level setting takes precedence over operator default |
 
 ### Function Status
 

@@ -66,7 +66,7 @@ var _ = Describe("Bundle", Label("bundle"), Ordered, func() {
 					"kubectl", "logs",
 					"-l", "control-plane=controller-manager",
 					"--namespace", testNs.Name,
-					"-t", "-1")
+					"--tail", "20")
 				controllerLogs, err := utils.Run(cmd)
 				if err == nil {
 					_, _ = fmt.Fprintf(GinkgoWriter, "Controller logs:\n %s", controllerLogs)

@@ -236,7 +236,7 @@ func logFailedTestDetails(functionName, functionNamespace string) {
 	}
 
 	By("Fetching controller manager pod logs")
-	cmd := exec.Command("kubectl", "logs", "-l", "control-plane=controller-manager", "-n", namespace, "-t", "20")
+	cmd := exec.Command("kubectl", "logs", "-l", "control-plane=controller-manager", "-n", namespace, "--tail", "20")
 	controllerLogs, err := utils.Run(cmd)
 	if err == nil {
 		_, _ = fmt.Fprintf(GinkgoWriter, "Controller logs:\n %s", controllerLogs)

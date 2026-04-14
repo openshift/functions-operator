@@ -184,3 +184,13 @@ func (f *Function) MarkMiddlewareNotUpToDate(reason, messageFormat string, messa
 		ObservedGeneration: f.Generation,
 	})
 }
+
+func (f *Function) MarkMiddlewareNotUpToDateIntentionally(reason, messageFormat string, messageA ...interface{}) bool {
+	return meta.SetStatusCondition(&f.Status.Conditions, metav1.Condition{
+		Type:               TypeMiddlewareUpToDate,
+		Status:             metav1.ConditionTrue,
+		Reason:             reason,
+		Message:            fmt.Sprintf(messageFormat, messageA...),
+		ObservedGeneration: f.Generation,
+	})
+}

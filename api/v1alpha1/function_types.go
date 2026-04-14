@@ -43,7 +43,6 @@ type FunctionSpec struct {
 
 	// AutoUpdateMiddleware defines if the operator should rebuild the function when an outdated middleware is detected.
 	// Defaults to the global operator config.
-	// TODO: implement logic
 	AutoUpdateMiddleware *bool `json:"autoUpdateMiddleware,omitempty"`
 }
 

@@ -74,7 +74,7 @@ func RunFuncDeploy(functionDir string, optFns ...FuncDeployOption) (string, erro
 		args = append(args, "--builder", opts.Builder)
 	}
 
-	if opts.Deployer != "" {
+	if opts.Deployer != "" && opts.Deployer != "knative" {
 		args = append(args, "--deployer", opts.Deployer)
 	}
 

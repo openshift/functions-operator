@@ -20,10 +20,10 @@ jobs:
         deployer: [knative, raw, keda]
     steps:
       - name: Clone the code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -37,7 +37,7 @@ jobs:
         run: kind version
 
       - name: Install helm
-        uses: azure/setup-helm@v4.3.0
+        uses: azure/setup-helm@v5.0.0
 
         # func CLI is needed in some e2e tests ATM
       - name: Install func cli
@@ -68,7 +68,7 @@ jobs:
 
       - name: Upload Kubernetes artifacts
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: func-operator-logs-${{ matrix.builder }}-${{ matrix.deployer }}
           path: /tmp/k8s-artifacts/

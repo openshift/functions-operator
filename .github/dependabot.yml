@@ -6,11 +6,8 @@ updates:
     schedule:
       interval: "daily"
     open-pull-requests-limit: 10
-    labels:
-      - "dependencies"
-      - "go"
     commit-message:
-      prefix: "chore(deps)"
+      prefix: "chore"
       include: "scope"
     groups:
       kubernetes:
@@ -25,11 +22,8 @@ updates:
       interval: "weekly"
       day: "monday"
       time: "06:00"
-    labels:
-      - "dependencies"
-      - "github-actions"
     commit-message:
-      prefix: "chore(github-actions)"
+      prefix: "chore github-actions"
       include: "scope"
     groups:
       github-actions:
@@ -41,9 +35,6 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
-    labels:
-      - "dependencies"
-      - "docker"
     commit-message:
-      prefix: "chore(docker)"
+      prefix: "chore docker"
       include: "scope"

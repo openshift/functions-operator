@@ -54,11 +54,6 @@ var _ = Describe("Middleware Update", func() {
 					"as those are not supported on used CLI version (1.20.x) of this tests")
 			}
 
-			if os.Getenv("DEFAULT_BUILDER") == "pack" {
-				Skip("Skipping middleware test for pack builder, " +
-					"as it does not add the middleware version label on remote builds yet")
-			}
-
 			var err error
 
 			// Create repository provider resources with automatic cleanup
@@ -268,11 +263,6 @@ var _ = Describe("Middleware Update", func() {
 			if os.Getenv("DEFAULT_DEPLOYER") == "keda" || os.Getenv("DEFAULT_DEPLOYER") == "raw" {
 				Skip("Skipping middleware test for Keda & raw deployer, " +
 					"as those are not supported on used CLI version (1.20.x) of this tests")
-			}
-
-			if os.Getenv("DEFAULT_BUILDER") == "pack" {
-				Skip("Skipping middleware test for pack builder, " +
-					"as it does not add the middleware version label on remote builds yet")
 			}
 
 			var err error

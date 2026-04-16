@@ -2,6 +2,8 @@ name: Tests
 
 on:
   push:
+    branches:
+      - 'release-*' # for main branch we have the merge queue
   pull_request:
   merge_group:
 

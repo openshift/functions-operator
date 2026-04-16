@@ -78,6 +78,7 @@ type FunctionStatus struct {
 
 	Git        FunctionStatusGit        `json:"git,omitempty"`
 	Deployment FunctionStatusDeployment `json:"deployment,omitempty"`
+	Middleware FunctionStatusMiddleware `json:"middleware,omitempty"`
 }
 
 type FunctionStatusGit struct {
@@ -91,6 +92,19 @@ type FunctionStatusDeployment struct {
 	ImageBuilt metav1.Time `json:"imageBuilt,omitempty"`
 	Deployer   string      `json:"deployer,omitempty"`
 	Runtime    string      `json:"runtime,omitempty"`
+}
+
+type FunctionStatusMiddleware struct {
+	Current        string                             `json:"current,omitempty"`
+	Available      *string                            `json:"available,omitempty"`
+	AutoUpdate     FunctionStatusMiddlewareAutoUpdate `json:"autoUpdate"`
+	PendingRebuild bool                               `json:"pendingRebuild"` // no omitempty to have it always shown
+	LastRebuild    metav1.Time                        `json:"lastRebuild,omitempty"`
+}
+
+type FunctionStatusMiddlewareAutoUpdate struct {
+	Enabled bool   `json:"enabled"` // no omitempty to have it always shown
+	Source  string `json:"source,omitempty"`
 }
 
 // +kubebuilder:object:root=true

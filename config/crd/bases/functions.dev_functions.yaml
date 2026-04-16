@@ -187,6 +187,30 @@ spec:
                   resolvedBranch:
                     type: string
                 type: object
+              middleware:
+                properties:
+                  autoUpdate:
+                    properties:
+                      enabled:
+                        type: boolean
+                      source:
+                        type: string
+                    required:
+                    - enabled
+                    type: object
+                  available:
+                    type: string
+                  current:
+                    type: string
+                  lastRebuild:
+                    format: date-time
+                    type: string
+                  pendingRebuild:
+                    type: boolean
+                required:
+                - autoUpdate
+                - pendingRebuild
+                type: object
               name:
                 type: string
             required:

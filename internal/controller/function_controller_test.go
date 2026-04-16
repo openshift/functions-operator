@@ -275,6 +275,33 @@ var _ = Describe("Function Controller", func() {
 					"autoUpdateMiddleware": "true",
 				},
 			}),
+
+			Entry("Should populate the middleware information in the status", reconcileTestCase{
+				spec: functionsdevv1alpha1.FunctionSpec{
+					Repository: functionsdevv1alpha1.FunctionSpecRepository{
+						URL: "https://github.com/foo/bar",
+					},
+					AutoUpdateMiddleware: ptr.To(true),
+				},
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v2.0.0",
+						},
+						Image: "my-image:v1.2.3",
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v2.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v2.0.0", nil)
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
+					Expect(status.Middleware.Current).Should(Equal("v2.0.0"))
+					Expect(status.Middleware.AutoUpdate.Enabled).Should(BeTrue())
+					Expect(status.Middleware.AutoUpdate.Source).Should(Equal("function"))
+					Expect(status.Middleware.Available).Should(BeNil())
+				},
+			}),
 		)
 	})
 })

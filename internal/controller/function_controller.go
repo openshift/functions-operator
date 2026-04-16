@@ -214,6 +214,22 @@ func (r *FunctionReconciler) ensureDeployment(ctx context.Context, function *v1a
 func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, function *v1alpha1.Function, repo *git.Repository, metadata *funcfn.Function) error {
 	logger := log.FromContext(ctx)
 
+	functionDescribe, err := r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
+	if err != nil {
+		return fmt.Errorf("failed to describe function to get image details: %w", err)
+	}
+	function.Status.Deployment.Image = functionDescribe.Image
+
+	isMiddlewareUpdateEnabled, source, err := r.isMiddlewareUpdateEnabled(ctx, function)
+	if err != nil {
+		function.MarkMiddlewareNotUpToDate("MiddlewareCheckFailed", "Failed to check if middleware should be updated: %s", err)
+		return fmt.Errorf("failed to check if middleware should be updated: %w", err)
+	}
+	function.Status.Middleware.AutoUpdate.Enabled = isMiddlewareUpdateEnabled
+	function.Status.Middleware.AutoUpdate.Source = source
+	function.Status.Middleware.Current = functionDescribe.Middleware.Version
+	function.Status.Middleware.PendingRebuild = false
+
 	isOnLatestMiddleware, err := r.isMiddlewareLatest(ctx, metadata, function.Namespace)
 	if err != nil {
 		function.MarkMiddlewareNotUpToDate("MiddlewareCheckFailed", "Failed to check middleware version: %s", err.Error())
@@ -221,11 +237,11 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 	}
 
 	if !isOnLatestMiddleware {
-		isMiddlewareUpdateEnabled, source, err := r.isMiddlewareUpdateEnabled(ctx, function)
+		latestMiddleware, err := r.FuncCliManager.GetLatestMiddlewareVersion(ctx, metadata.Runtime, metadata.Invoke)
 		if err != nil {
-			function.MarkMiddlewareNotUpToDate("MiddlewareCheckFailed", "Failed to check if middleware should be updated: %s", err)
-			return fmt.Errorf("failed to check if middleware should be updated: %w", err)
+			return fmt.Errorf("failed to get latest available middleware version: %w", err)
 		}
+		function.Status.Middleware.Available = ptr.To(latestMiddleware)
 
 		if !isMiddlewareUpdateEnabled {
 			logger.Info("Skipping middleware update, as middleware update is disabled")
@@ -235,12 +251,7 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 			logger.Info("Function is not on latest middleware and middleware update is enabled. Will redeploy")
 			function.MarkMiddlewareNotUpToDate("MiddlewareOutdated", "Middleware is outdated, redeploying")
 
-			// update function image in status before long redeploy operation
-			functionDescribe, err := r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
-			if err != nil {
-				return fmt.Errorf("failed to describe function to get image details: %w", err)
-			}
-			function.Status.Deployment.Image = functionDescribe.Image
+			function.Status.Middleware.PendingRebuild = true
 
 			// Flush status before long deploy operation
 			if err := FlushStatus(ctx, function); err != nil {
@@ -252,20 +263,26 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 				return fmt.Errorf("failed to redeploy function: %w", err)
 			}
 
+			function.Status.Middleware.PendingRebuild = false
+			function.Status.Middleware.LastRebuild = metav1.Now()
+
 			// After successful deployment, middleware is now up-to-date
 			function.MarkMiddlewareUpToDate()
+			function.Status.Middleware.Available = nil // if function is on latest, we don't need to show this field
 		}
 	} else {
 		logger.Info("Function is deployed with latest middleware. No need to redeploy")
 		function.MarkMiddlewareUpToDate()
+		function.Status.Middleware.Available = nil // if function is on latest, we don't need to show this field
 	}
 
 	// Update deployment status
-	functionDescribe, err := r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
+	functionDescribe, err = r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
 	if err != nil {
 		return fmt.Errorf("failed to describe function to get image details: %w", err)
 	}
 	function.Status.Deployment.Image = functionDescribe.Image
+	function.Status.Middleware.Current = functionDescribe.Middleware.Version
 
 	function.MarkDeployReady()
 	return nil

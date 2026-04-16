@@ -21,7 +21,7 @@ jobs:
           steps.metadata.outputs.update-type == 'version-update:semver-minor' ||
           steps.metadata.outputs.update-type == 'version-update:semver-patch'
         run: |
-          gh pr merge "$PR_URL"
+          gh pr merge "$PR_URL" --auto
           gh pr comment "$PR_URL" --body "✅ Auto-merge enabled. This PR will merge automatically / added to merge queue, once all checks pass."
         env:
           PR_URL: ${{ github.event.pull_request.html_url }}

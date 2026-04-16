@@ -220,16 +220,36 @@ install: manifests kustomize ## Install CRDs into the K8s cluster specified in ~
 uninstall: manifests kustomize ## Uninstall CRDs from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/crd | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
+.PHONY: patch-registry-cert
+patch-registry-cert: ## Patch deployment to mount local registry certificate (for Kind development)
+	@if [ -f hack/registry-certs/registry.crt ]; then \
+		echo "Creating ConfigMap with registry certificate..."; \
+		$(KUBECTL) create configmap registry-ca-cert \
+			--from-file=ca.crt=hack/registry-certs/registry.crt \
+			--namespace=func-operator-system \
+			--dry-run=client -o yaml | $(KUBECTL) apply -f -; \
+		if ! $(KUBECTL) get deployment func-operator-controller-manager -n func-operator-system -o jsonpath='{.spec.template.spec.volumes[*].name}' | grep -q registry-ca-cert; then \
+			echo "Patching deployment to mount local registry certificate..."; \
+			$(KUBECTL) patch deployment func-operator-controller-manager -n func-operator-system --type=json -p='[{"op":"add","path":"/spec/template/spec/volumes/-","value":{"name":"registry-ca-cert","configMap":{"name":"registry-ca-cert"}}},{"op":"add","path":"/spec/template/spec/containers/0/volumeMounts/-","value":{"name":"registry-ca-cert","mountPath":"/etc/ssl/certs/kind-registry-ca.crt","subPath":"ca.crt","readOnly":true}}]'; \
+		else \
+			echo "Registry certificate already mounted, skipping patch"; \
+		fi; \
+	else \
+		echo "Registry certificate not found at hack/registry-certs/registry.crt, skipping patch"; \
+	fi
+
 .PHONY: deploy
 deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
+	$(MAKE) patch-registry-cert
 	$(KUBECTL) wait deployment --all --timeout=120s --for=condition=Available -n func-operator-system
 
 .PHONY: deploy-debugger
 deploy-debugger: manifests kustomize ## Deploy debug controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${DEBUG_IMG}
 	$(KUSTOMIZE) build config/debug | $(KUBECTL) apply -f -
+	$(MAKE) patch-registry-cert
 
 .PHONY: undeploy
 undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.

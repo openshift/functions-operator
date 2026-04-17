@@ -47,9 +47,6 @@ var _ = Describe("Bundle", Label("bundle"), Ordered, func() {
 		testNamespaces []TestNamespace
 	)
 
-	SetDefaultEventuallyTimeout(5 * time.Minute)
-	SetDefaultEventuallyPollingInterval(time.Second)
-
 	BeforeAll(func() {
 		bundleImage = os.Getenv("BUNDLE_IMG")
 		Expect(bundleImage).ToNot(BeEmpty(), "BUNDLE_IMG must be given")

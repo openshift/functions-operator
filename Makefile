@@ -119,12 +119,12 @@ test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
 
 .PHONY: test-e2e ## Run e2e tests.
-test-e2e:
-	go test -timeout 1h ./test/e2e/ -v -ginkgo.v -ginkgo.timeout=1h -ginkgo.label-filter="!bundle"
+test-e2e: ginkgo
+	$(GINKGO) -v --timeout=1h --label-filter="!bundle" --fail-fast -p ./test/e2e/
 
 .PHONY: test-e2e-bundle ## Run bundle e2e tests.
-test-e2e-bundle: operator-sdk docker-build docker-push bundle bundle-build bundle-push install-olm-in-cluster
-	OPERATOR_SDK=$(OPERATOR_SDK) BUNDLE_IMG=$(BUNDLE_IMG) go test -timeout 1h ./test/e2e/ -v -ginkgo.v -ginkgo.timeout=1h -ginkgo.label-filter="bundle"
+test-e2e-bundle: operator-sdk docker-build docker-push bundle bundle-build bundle-push install-olm-in-cluster ginkgo
+	OPERATOR_SDK=$(OPERATOR_SDK) BUNDLE_IMG=$(BUNDLE_IMG) $(GINKGO) -v --timeout=1h --label-filter="bundle" --fail-fast ./test/e2e/
 
 .PHONY: install-olm-in-cluster
 install-olm-in-cluster: operator-sdk ## Install OLM in cluster if not already installed.
@@ -277,10 +277,12 @@ CONTROLLER_GEN ?= $(LOCALBIN)/controller-gen
 ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 MOCKERY = $(LOCALBIN)/mockery
+GINKGO = $(LOCALBIN)/ginkgo
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.6.0
 CONTROLLER_TOOLS_VERSION ?= v0.18.0
+GINKGO_VERSION ?= v2.28.1
 #ENVTEST_VERSION is the version of controller-runtime release branch to fetch the envtest setup script (i.e. release-0.20)
 ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller-runtime | awk -F'[v.]' '{printf "release-%d.%d", $$2, $$3}')
 #ENVTEST_K8S_VERSION is the version of Kubernetes to use for setting up ENVTEST binaries (i.e. 1.31)
@@ -320,6 +322,11 @@ $(GOLANGCI_LINT): $(LOCALBIN)
 mockery: ${MOCKERY} ## Download mockery locally if necessary.
 ${MOCKERY}: $(LOCALBIN)
 	$(call go-install-tool,${MOCKERY},github.com/vektra/mockery/v3,${MOCKERY_VERSION})
+
+.PHONY: ginkgo
+ginkgo: $(GINKGO) ## Download ginkgo locally if necessary.
+$(GINKGO): $(LOCALBIN)
+	$(call go-install-tool,$(GINKGO),github.com/onsi/ginkgo/v2/ginkgo,$(GINKGO_VERSION))
 
 # go-install-tool will 'go install' any package with custom target and name of binary, if it doesn't exist
 # $1 - target path with name of binary

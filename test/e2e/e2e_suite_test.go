@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -50,6 +51,11 @@ func TestE2E(t *testing.T) {
 
 var _ = BeforeSuite(func() {
 	ctx = context.Background()
+
+	// Set global timeout for Eventually assertions
+	// Must be set here (not in Describe blocks) to avoid race conditions in parallel execution
+	SetDefaultEventuallyTimeout(10 * time.Minute)
+	SetDefaultEventuallyPollingInterval(1 * time.Second)
 
 	// Register the Function API scheme
 	err := functionsdevv1alpha1.AddToScheme(scheme.Scheme)

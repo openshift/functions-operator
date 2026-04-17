@@ -39,7 +39,9 @@ ARG FUNC_CLI_GH_REPO=knative/func
 ARG FUNC_CLI_BRANCH=main
 
 # workaround to invalidate cache when func cli repo got updated
-ADD https://api.github.com/repos/${FUNC_CLI_GH_REPO}/git/refs/heads/${FUNC_CLI_BRANCH} version.json
+# Use git ls-remote instead of GitHub API to avoid rate limiting (60 req/hour for unauthenticated)
+# which caused merge queue failures due to multiple concurrent builds
+RUN git ls-remote https://github.com/${FUNC_CLI_GH_REPO} refs/heads/${FUNC_CLI_BRANCH} > version.json
 
 WORKDIR /workspace
 RUN git clone --branch ${FUNC_CLI_BRANCH} --single-branch --depth 1 https://github.com/${FUNC_CLI_GH_REPO} .

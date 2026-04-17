@@ -24,6 +24,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
+
+	ginkgo "github.com/onsi/ginkgo/v2"
 )
 
 // RunFunc executes the func CLI with the current/latest version
@@ -46,7 +49,7 @@ func RunFuncWithVersion(version string, command string, args ...string) (string,
 	return Run(cmd)
 }
 
-// RunFuncDeploy runs func deploy
+// RunFuncDeploy runs func deploy with retry logic for transient network errors
 func RunFuncDeploy(functionDir string, optFns ...FuncDeployOption) (string, error) {
 	opts := &FuncDeployOptions{
 		// defaults
@@ -78,11 +81,28 @@ func RunFuncDeploy(functionDir string, optFns ...FuncDeployOption) (string, erro
 		args = append(args, "--deployer", opts.Deployer)
 	}
 
-	if opts.CliVersion != "" {
-		return RunFuncWithVersion(opts.CliVersion, "deploy", args...)
+	var output string
+	var err error
+
+	// Retry up to 3 times with 5s delay between attempts
+	for attempt := 0; attempt < 3; attempt++ {
+		if attempt > 0 {
+			time.Sleep(5 * time.Second)
+			_, _ = fmt.Fprintf(ginkgo.GinkgoWriter, "func deploy attempt %d failed: %v (retrying)\n", attempt, err)
+		}
+
+		if opts.CliVersion != "" {
+			output, err = RunFuncWithVersion(opts.CliVersion, "deploy", args...)
+		} else {
+			output, err = RunFunc("deploy", args...)
+		}
+
+		if err == nil {
+			return output, nil
+		}
 	}
 
-	return RunFunc("deploy", args...)
+	return output, err
 }
 
 type FuncDeployOptions struct {

@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"reflect"
 	"strings"
 
 	. "github.com/onsi/ginkgo/v2" // nolint:revive,staticcheck
@@ -80,4 +81,17 @@ func GetTestNamespace() (string, error) {
 	}
 
 	return name, nil
+}
+
+func DeferCleanupOnSuccess(args ...any) {
+	DeferCleanup(func() {
+		if !CurrentSpecReport().Failed() {
+			fn := reflect.ValueOf(args[0])
+			in := make([]reflect.Value, len(args)-1)
+			for i, arg := range args[1:] {
+				in[i] = reflect.ValueOf(arg)
+			}
+			fn.Call(in)
+		}
+	})
 }

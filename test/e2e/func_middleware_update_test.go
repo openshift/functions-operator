@@ -39,9 +39,6 @@ import (
 
 var _ = Describe("Middleware Update", func() {
 
-	SetDefaultEventuallyTimeout(2 * time.Minute)
-	SetDefaultEventuallyPollingInterval(time.Second)
-
 	Context("with a function deployed using old func CLI", func() {
 
 		var repoURL string
@@ -59,15 +56,15 @@ var _ = Describe("Middleware Update", func() {
 			// Create repository provider resources with automatic cleanup
 			username, password, _, cleanup, err := repoProvider.CreateRandomUser()
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanup)
+			utils.DeferCleanupOnSuccess(cleanup)
 
 			_, repoURL, cleanup, err = repoProvider.CreateRandomRepo(username, false)
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanup)
+			utils.DeferCleanupOnSuccess(cleanup)
 
 			functionNamespace, err = utils.GetTestNamespace()
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNamespaces, functionNamespace)
+			utils.DeferCleanupOnSuccess(cleanupNamespaces, functionNamespace)
 
 			// Initialize repository with function code using OLD func CLI version
 			// v1.20.2 has no middleware-version label and uses instance-compatible templates
@@ -79,7 +76,7 @@ var _ = Describe("Middleware Update", func() {
 				"go",
 				utils.WithCliVersion(oldFuncVersion))
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(os.RemoveAll, repoDir)
+			utils.DeferCleanupOnSuccess(os.RemoveAll, repoDir)
 
 			// Deploy function using the same OLD func CLI version
 			out, err := utils.RunFuncDeploy(repoDir,
@@ -89,7 +86,7 @@ var _ = Describe("Middleware Update", func() {
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 
 			// Cleanup func deployment
-			DeferCleanup(func() {
+			utils.DeferCleanupOnSuccess(func() {
 				_, _ = utils.RunFunc("delete", "--path", repoDir, "--namespace", functionNamespace)
 			})
 
@@ -171,7 +168,7 @@ var _ = Describe("Middleware Update", func() {
 			err = json.Unmarshal([]byte(skopeoOutput), &initialImageLabels)
 			Expect(err).NotTo(HaveOccurred())
 
-			initialMiddlewareVersion := initialImageLabels.Labels["middleware-version"]
+			initialMiddlewareVersion := initialImageLabels.Labels[funcfn.MiddlewareVersionLabelKey]
 			_, _ = fmt.Fprintf(GinkgoWriter, "Initial middleware-version label: '%s' (expected empty for v1.20.2)\n",
 				initialMiddlewareVersion)
 
@@ -193,8 +190,7 @@ var _ = Describe("Middleware Update", func() {
 
 			functionName = fn.Name
 
-			// Middleware update could take a bit longer therefore give more time
-			Eventually(functionBecomesReady(functionName, functionNamespace), 6*time.Minute).Should(Succeed())
+			Eventually(functionBecomesReady(functionName, functionNamespace)).Should(Succeed())
 
 			// Verify middleware was actually updated by inspecting the new image
 			out, err = utils.RunFunc("describe", deployedFunctionName, "-n", functionNamespace, "-o", "yaml")
@@ -238,7 +234,7 @@ var _ = Describe("Middleware Update", func() {
 			err = json.Unmarshal([]byte(skopeoOutput), &updatedImageLabels)
 			Expect(err).NotTo(HaveOccurred())
 
-			updatedMiddlewareVersion := updatedImageLabels.Labels["middleware-version"]
+			updatedMiddlewareVersion := updatedImageLabels.Labels[funcfn.MiddlewareVersionLabelKey]
 			_, _ = fmt.Fprintf(GinkgoWriter, "Updated middleware-version label: '%s'\n", updatedMiddlewareVersion)
 
 			// The operator should have set a middleware version
@@ -248,7 +244,8 @@ var _ = Describe("Middleware Update", func() {
 		})
 	})
 
-	Context("when ConfigMap autoUpdateMiddleware setting changes", func() {
+	// this context should not run in parallel (--> Serial), as this would interfere other tests
+	Context("when ConfigMap autoUpdateMiddleware setting changes", Serial /* don't run in parallel */, func() {
 		const (
 			operatorNamespace    = "func-operator-system"
 			controllerConfigName = "func-operator-controller-config"
@@ -297,15 +294,15 @@ var _ = Describe("Middleware Update", func() {
 			// Create repository provider resources with automatic cleanup
 			username, password, _, cleanup, err := repoProvider.CreateRandomUser()
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanup)
+			utils.DeferCleanupOnSuccess(cleanup)
 
 			_, repoURL, cleanup, err = repoProvider.CreateRandomRepo(username, false)
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanup)
+			utils.DeferCleanupOnSuccess(cleanup)
 
 			functionNamespace, err = utils.GetTestNamespace()
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(cleanupNamespaces, functionNamespace)
+			utils.DeferCleanupOnSuccess(cleanupNamespaces, functionNamespace)
 
 			// Initialize repository with function code using OLD func CLI version
 			// to ensure middleware will be outdated
@@ -317,7 +314,7 @@ var _ = Describe("Middleware Update", func() {
 				"go",
 				utils.WithCliVersion(oldFuncVersion))
 			Expect(err).NotTo(HaveOccurred())
-			DeferCleanup(os.RemoveAll, repoDir)
+			utils.DeferCleanupOnSuccess(os.RemoveAll, repoDir)
 
 			// Deploy function using the same OLD func CLI version
 			out, err := utils.RunFuncDeploy(repoDir,
@@ -327,7 +324,7 @@ var _ = Describe("Middleware Update", func() {
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 
 			// Cleanup func deployment
-			DeferCleanup(func() {
+			utils.DeferCleanupOnSuccess(func() {
 				_, _ = utils.RunFunc("delete", "--path", repoDir, "--namespace", functionNamespace)
 			})
 
@@ -456,7 +453,7 @@ var _ = Describe("Middleware Update", func() {
 					}
 				}
 				g.Expect(false).To(BeTrue(), "MiddlewareUpToDate condition not found")
-			}, 5*time.Minute).Should(Succeed())
+			}).Should(Succeed())
 
 			Eventually(functionBecomesReady(functionName, functionNamespace)).Should(Succeed())
 		})

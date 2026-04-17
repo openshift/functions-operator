@@ -1,5 +1,11 @@
 # func-operator
 
+[![GitHub release](https://img.shields.io/github/v/release/functions-dev/func-operator?style=flat-square)](https://github.com/functions-dev/func-operator/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/functions-dev/func-operator?style=flat-square)](https://goreportcard.com/report/github.com/functions-dev/func-operator)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/functions-dev/func-operator?style=flat-square)](https://go.dev/)
+[![License](https://img.shields.io/github/license/functions-dev/func-operator?style=flat-square)](LICENSE)
+[![CI](https://img.shields.io/github/actions/workflow/status/functions-dev/func-operator/test.yml?branch=main&label=CI&style=flat-square)](https://github.com/functions-dev/func-operator/actions/workflows/test.yml)
+
 A Kubernetes operator for managing middleware updates for serverless functions deployed with the `func` CLI. This operator monitors deployed functions and automatically rebuilds them when outdated middleware is detected, ensuring functions stay up-to-date with the latest middleware versions.
 
 ## Prerequisites

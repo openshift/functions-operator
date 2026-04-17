@@ -189,16 +189,16 @@ docker-buildx: ## Build and push docker image for the manager for cross-platform
 	rm Dockerfile.cross
 
 .PHONY: build-installer
-build-installer: manifests generate kustomize ## Generate a consolidated YAML with CRDs and deployment.
+build-installer: manifests generate kustomize yq ## Generate a consolidated YAML with CRDs and deployment.
 	mkdir -p dist
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	@if [ -n "$(VERSION_LABEL)" ] || [ -n "$(GIT_SHA_LABEL)" ]; then \
-		yq write --inplace config/default/kustomization.yaml 'labels[+].includeSelectors' true; \
+		$(YQ) write --inplace config/default/kustomization.yaml 'labels[+].includeSelectors' true; \
 		if [ -n "$(VERSION_LABEL)" ]; then \
-			yq write --inplace config/default/kustomization.yaml 'labels[0].pairs[app.kubernetes.io/version]' '$(VERSION_LABEL)'; \
+			$(YQ) write --inplace config/default/kustomization.yaml 'labels[0].pairs[app.kubernetes.io/version]' '$(VERSION_LABEL)'; \
 		fi; \
 		if [ -n "$(GIT_SHA_LABEL)" ]; then \
-			yq write --inplace config/default/kustomization.yaml 'labels[0].pairs[app.kubernetes.io/commit]' '$(GIT_SHA_LABEL)'; \
+			$(YQ) write --inplace config/default/kustomization.yaml 'labels[0].pairs[app.kubernetes.io/commit]' '$(GIT_SHA_LABEL)'; \
 		fi; \
 	fi
 	$(KUSTOMIZE) build config/default > dist/install.yaml
@@ -278,6 +278,7 @@ ENVTEST ?= $(LOCALBIN)/setup-envtest
 GOLANGCI_LINT = $(LOCALBIN)/golangci-lint
 MOCKERY = $(LOCALBIN)/mockery
 GINKGO = $(LOCALBIN)/ginkgo
+YQ ?= $(LOCALBIN)/yq
 
 ## Tool Versions
 KUSTOMIZE_VERSION ?= v5.6.0
@@ -289,6 +290,7 @@ ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
 GOLANGCI_LINT_VERSION ?= v2.1.0
 MOCKERY_VERSION ?= v3.5.5
+YQ_VERSION ?= 3.4.1
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.
@@ -343,6 +345,17 @@ mv $(1) $(1)-$(3) ;\
 } ;\
 ln -sf $(1)-$(3) $(1)
 endef
+
+.PHONY: yq
+yq: $(YQ) ## Download yq locally if necessary.
+$(YQ): $(LOCALBIN)
+	@{ \
+	set -e ;\
+	mkdir -p $(dir $(YQ)) ;\
+	OS=$(shell go env GOOS) && ARCH=$(shell go env GOARCH) && \
+	curl -sSLo $(YQ) https://github.com/mikefarah/yq/releases/download/$(YQ_VERSION)/yq_$${OS}_$${ARCH} ;\
+	chmod +x $(YQ) ;\
+	}
 
 .PHONY: operator-sdk
 OPERATOR_SDK ?= $(LOCALBIN)/operator-sdk

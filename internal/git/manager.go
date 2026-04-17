@@ -10,7 +10,7 @@ import (
 	"github.com/functions-dev/func-operator/internal/monitoring"
 	"github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
-	"github.com/go-git/go-git/v6/plumbing/transport"
+	"github.com/go-git/go-git/v6/plumbing/client"
 	"github.com/go-git/go-git/v6/plumbing/transport/http"
 	"github.com/prometheus/client_golang/prometheus"
 )
@@ -49,7 +49,7 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 		ReferenceName: plumbing.ReferenceName(reference),
 		SingleBranch:  true,
 		Depth:         1,
-		Auth:          m.getAuth(auth),
+		ClientOptions: m.getClientOptions(auth),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone repo: %w", err)
@@ -68,19 +68,23 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 	}, nil
 }
 
-func (m *managerImpl) getAuth(authSecret map[string][]byte) transport.AuthMethod {
+func (m *managerImpl) getClientOptions(authSecret map[string][]byte) []client.Option {
 	if len(authSecret) == 0 {
 		return nil
 	} else if token, ok := authSecret["token"]; ok {
-		return &http.BasicAuth{
-			Username: "empty", // can be anything except an empty string
-			Password: string(token),
+		return []client.Option{
+			client.WithHTTPAuth(&http.BasicAuth{
+				Username: "empty", // can be anything except an empty string
+				Password: string(token),
+			}),
 		}
 	} else if username, ok := authSecret["username"]; ok {
 		if password, ok := authSecret["password"]; ok {
-			return &http.BasicAuth{
-				Username: string(username),
-				Password: string(password),
+			return []client.Option{
+				client.WithHTTPAuth(&http.BasicAuth{
+					Username: string(username),
+					Password: string(password),
+				}),
 			}
 		}
 		return nil

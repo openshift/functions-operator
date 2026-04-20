@@ -66,41 +66,48 @@ func init() {
 	monitoring.RegisterMetrics()
 }
 
-// nolint:gocyclo
-func main() {
-	var metricsAddr string
-	var metricsCertPath, metricsCertName, metricsCertKey string
-	var webhookCertPath, webhookCertName, webhookCertKey string
-	var enableLeaderElection bool
-	var probeAddr string
-	var secureMetrics bool
-	var enableHTTP2 bool
-	var funcCLIPath string
-	var funcCLICheckInterval time.Duration
-	var tlsOpts []func(*tls.Config)
-	var disableFuncCLIUpdate bool
-	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
+type cliFlags struct {
+	metricsAddr          string
+	metricsCertPath      string
+	metricsCertName      string
+	metricsCertKey       string
+	webhookCertPath      string
+	webhookCertName      string
+	webhookCertKey       string
+	enableLeaderElection bool
+	probeAddr            string
+	secureMetrics        bool
+	enableHTTP2          bool
+	funcCLIPath          string
+	funcCLICheckInterval time.Duration
+	disableFuncCLIUpdate bool
+}
+
+func parseFlags() cliFlags {
+	var flags cliFlags
+	flag.StringVar(&flags.metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
-	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
-	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
+	flag.StringVar(&flags.probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.BoolVar(&flags.enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
-	flag.BoolVar(&secureMetrics, "metrics-secure", true,
+	flag.BoolVar(&flags.secureMetrics, "metrics-secure", true,
 		"If set, the metrics endpoint is served securely via HTTPS. Use --metrics-secure=false to use HTTP instead.")
-	flag.StringVar(&webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate.")
-	flag.StringVar(&webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
-	flag.StringVar(&webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
-	flag.StringVar(&metricsCertPath, "metrics-cert-path", "",
+	flag.StringVar(&flags.webhookCertPath, "webhook-cert-path", "", "The directory that contains the webhook certificate.")
+	flag.StringVar(&flags.webhookCertName, "webhook-cert-name", "tls.crt", "The name of the webhook certificate file.")
+	flag.StringVar(&flags.webhookCertKey, "webhook-cert-key", "tls.key", "The name of the webhook key file.")
+	flag.StringVar(&flags.metricsCertPath, "metrics-cert-path", "",
 		"The directory that contains the metrics server certificate.")
-	flag.StringVar(&metricsCertName, "metrics-cert-name", "tls.crt", "The name of the metrics server certificate file.")
-	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
-	flag.BoolVar(&enableHTTP2, "enable-http2", false,
+	flag.StringVar(&flags.metricsCertName, "metrics-cert-name", "tls.crt",
+		"The name of the metrics server certificate file.")
+	flag.StringVar(&flags.metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
+	flag.BoolVar(&flags.enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
-	flag.StringVar(&funcCLIPath, "func-cli-path", filepath.Join(os.TempDir(), "func-operator", "bin"),
+	flag.StringVar(&flags.funcCLIPath, "func-cli-path", filepath.Join(os.TempDir(), "func-operator", "bin"),
 		"The directory where the func CLI binary will be installed")
-	flag.DurationVar(&funcCLICheckInterval, "func-cli-check-interval", 5*time.Minute,
+	flag.DurationVar(&flags.funcCLICheckInterval, "func-cli-check-interval", 5*time.Minute,
 		"How often to check for new func CLI versions")
-	flag.BoolVar(&disableFuncCLIUpdate, "disable-func-cli-update", false, "Disable the function-cli update")
+	flag.BoolVar(&flags.disableFuncCLIUpdate, "disable-func-cli-update", false, "Disable the function-cli update")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -108,6 +115,11 @@ func main() {
 	flag.Parse()
 
 	ctrl.SetLogger(zap.New(zap.UseFlagOptions(&opts)))
+	return flags
+}
+
+func setupTLSOptions(enableHTTP2 bool) []func(*tls.Config) {
+	var tlsOpts []func(*tls.Config)
 
 	// if the enable-http2 flag is false (the default), http/2 should be disabled
 	// due to its vulnerabilities. More specifically, disabling http/2 will
@@ -115,44 +127,79 @@ func main() {
 	// Rapid Reset CVEs. For more information see:
 	// - https://github.com/advisories/GHSA-qppj-fm5r-hxr3
 	// - https://github.com/advisories/GHSA-4374-p667-p6c8
-	disableHTTP2 := func(c *tls.Config) {
-		setupLog.Info("disabling http/2")
-		c.NextProtos = []string{"http/1.1"}
-	}
-
 	if !enableHTTP2 {
+		disableHTTP2 := func(c *tls.Config) {
+			setupLog.Info("disabling http/2")
+			c.NextProtos = []string{"http/1.1"}
+		}
 		tlsOpts = append(tlsOpts, disableHTTP2)
 	}
 
-	// Create watchers for metrics and webhooks certificates
-	var metricsCertWatcher, webhookCertWatcher *certwatcher.CertWatcher
+	return tlsOpts
+}
 
-	// Initial webhook TLS options
+func setupWebhookCertWatcher(certPath, certName, certKey string) (*certwatcher.CertWatcher, error) {
+	if len(certPath) == 0 {
+		return nil, nil
+	}
+
+	setupLog.Info("Initializing webhook certificate watcher using provided certificates",
+		"webhook-cert-path", certPath, "webhook-cert-name", certName, "webhook-cert-key", certKey)
+
+	watcher, err := certwatcher.New(
+		filepath.Join(certPath, certName),
+		filepath.Join(certPath, certKey),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return watcher, nil
+}
+
+func setupWebhookServer(webhookCertWatcher *certwatcher.CertWatcher, tlsOpts []func(*tls.Config)) webhook.Server {
 	webhookTLSOpts := tlsOpts
-
-	if len(webhookCertPath) > 0 {
-		setupLog.Info("Initializing webhook certificate watcher using provided certificates",
-			"webhook-cert-path", webhookCertPath, "webhook-cert-name", webhookCertName, "webhook-cert-key", webhookCertKey)
-
-		var err error
-		webhookCertWatcher, err = certwatcher.New(
-			filepath.Join(webhookCertPath, webhookCertName),
-			filepath.Join(webhookCertPath, webhookCertKey),
-		)
-		if err != nil {
-			setupLog.Error(err, "Failed to initialize webhook certificate watcher")
-			os.Exit(1)
-		}
-
+	if webhookCertWatcher != nil {
 		webhookTLSOpts = append(webhookTLSOpts, func(config *tls.Config) {
 			config.GetCertificate = webhookCertWatcher.GetCertificate
 		})
 	}
-
-	webhookServer := webhook.NewServer(webhook.Options{
+	return webhook.NewServer(webhook.Options{
 		TLSOpts: webhookTLSOpts,
 	})
+}
 
+func setupMetricsCertWatcher(certPath, certName, certKey string) (*certwatcher.CertWatcher, error) {
+	// If the certificate is not specified, controller-runtime will automatically
+	// generate self-signed certificates for the metrics server. While convenient for development and testing,
+	// this setup is not recommended for production.
+	//
+	// TODO(user): If you enable certManager, uncomment the following lines:
+	// - [METRICS-WITH-CERTS] at config/default/kustomization.yaml to generate and use certificates
+	// managed by cert-manager for the metrics server.
+	// - [PROMETHEUS-WITH-CERTS] at config/prometheus/kustomization.yaml for TLS certification.
+	if len(certPath) == 0 {
+		return nil, nil
+	}
+
+	setupLog.Info("Initializing metrics certificate watcher using provided certificates",
+		"metrics-cert-path", certPath, "metrics-cert-name", certName, "metrics-cert-key", certKey)
+
+	watcher, err := certwatcher.New(
+		filepath.Join(certPath, certName),
+		filepath.Join(certPath, certKey),
+	)
+	if err != nil {
+		return nil, err
+	}
+	return watcher, nil
+}
+
+func setupMetricsServerOptions(
+	metricsAddr string,
+	secureMetrics bool,
+	metricsCertWatcher *certwatcher.CertWatcher,
+	tlsOpts []func(*tls.Config),
+) metricsserver.Options {
 	// Metrics endpoint is enabled in 'config/default/kustomization.yaml'. The Metrics options configure the server.
 	// More info:
 	// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.21.0/pkg/metrics/server
@@ -171,39 +218,25 @@ func main() {
 		metricsServerOptions.FilterProvider = filters.WithAuthenticationAndAuthorization
 	}
 
-	// If the certificate is not specified, controller-runtime will automatically
-	// generate self-signed certificates for the metrics server. While convenient for development and testing,
-	// this setup is not recommended for production.
-	//
-	// TODO(user): If you enable certManager, uncomment the following lines:
-	// - [METRICS-WITH-CERTS] at config/default/kustomization.yaml to generate and use certificates
-	// managed by cert-manager for the metrics server.
-	// - [PROMETHEUS-WITH-CERTS] at config/prometheus/kustomization.yaml for TLS certification.
-	if len(metricsCertPath) > 0 {
-		setupLog.Info("Initializing metrics certificate watcher using provided certificates",
-			"metrics-cert-path", metricsCertPath, "metrics-cert-name", metricsCertName, "metrics-cert-key", metricsCertKey)
-
-		var err error
-		metricsCertWatcher, err = certwatcher.New(
-			filepath.Join(metricsCertPath, metricsCertName),
-			filepath.Join(metricsCertPath, metricsCertKey),
-		)
-		if err != nil {
-			setupLog.Error(err, "to initialize metrics certificate watcher", "error", err)
-			os.Exit(1)
-		}
-
+	if metricsCertWatcher != nil {
 		metricsServerOptions.TLSOpts = append(metricsServerOptions.TLSOpts, func(config *tls.Config) {
 			config.GetCertificate = metricsCertWatcher.GetCertificate
 		})
 	}
 
+	return metricsServerOptions
+}
+
+func getOperatorNamespace() string {
 	operatorNamespace := os.Getenv("SYSTEM_NAMESPACE")
 	if operatorNamespace == "" {
 		setupLog.Info("Operator namespace not set, defaulting to func-operator-system")
 		operatorNamespace = "func-operator-system"
 	}
+	return operatorNamespace
+}
 
+func setupCacheOptions(operatorNamespace string) cache.Options {
 	watchNamespaces := getWatchNamespaces()
 	var cacheOpts cache.Options
 	if len(watchNamespaces) > 0 {
@@ -228,12 +261,57 @@ func main() {
 		},
 	}
 
+	return cacheOpts
+}
+
+func addCertWatchers(mgr ctrl.Manager, metricsCertWatcher, webhookCertWatcher *certwatcher.CertWatcher) error {
+	if metricsCertWatcher != nil {
+		setupLog.Info("Adding metrics certificate watcher to manager")
+		if err := mgr.Add(metricsCertWatcher); err != nil {
+			return err
+		}
+	}
+
+	if webhookCertWatcher != nil {
+		setupLog.Info("Adding webhook certificate watcher to manager")
+		if err := mgr.Add(webhookCertWatcher); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func main() {
+	flags := parseFlags()
+
+	tlsOpts := setupTLSOptions(flags.enableHTTP2)
+
+	// Create watchers for metrics and webhooks certificates
+	webhookCertWatcher, err := setupWebhookCertWatcher(flags.webhookCertPath, flags.webhookCertName, flags.webhookCertKey)
+	if err != nil {
+		setupLog.Error(err, "Failed to initialize webhook certificate watcher")
+		os.Exit(1)
+	}
+
+	metricsCertWatcher, err := setupMetricsCertWatcher(flags.metricsCertPath, flags.metricsCertName, flags.metricsCertKey)
+	if err != nil {
+		setupLog.Error(err, "to initialize metrics certificate watcher")
+		os.Exit(1)
+	}
+
+	webhookServer := setupWebhookServer(webhookCertWatcher, tlsOpts)
+	metricsServerOptions := setupMetricsServerOptions(flags.metricsAddr, flags.secureMetrics, metricsCertWatcher, tlsOpts)
+
+	operatorNamespace := getOperatorNamespace()
+	cacheOpts := setupCacheOptions(operatorNamespace)
+
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
 		Scheme:                 scheme,
 		Metrics:                metricsServerOptions,
 		WebhookServer:          webhookServer,
-		HealthProbeBindAddress: probeAddr,
-		LeaderElection:         enableLeaderElection,
+		HealthProbeBindAddress: flags.probeAddr,
+		LeaderElection:         flags.enableLeaderElection,
 		LeaderElectionID:       "668e89e1.functions.dev",
 		// LeaderElectionReleaseOnCancel defines if the leader should step down voluntarily
 		// when the managerImpl ends. This requires the binary to immediately end when the
@@ -254,7 +332,8 @@ func main() {
 	}
 
 	// Initialize func CLI manager
-	funcCLIManager, err := funccli.NewManager(ctrl.Log, funcCLIPath, funcCLICheckInterval, disableFuncCLIUpdate)
+	funcCLIManager, err := funccli.NewManager(
+		ctrl.Log, flags.funcCLIPath, flags.funcCLICheckInterval, flags.disableFuncCLIUpdate)
 	if err != nil {
 		setupLog.Error(err, "unable to create func CLI manager")
 		os.Exit(1)
@@ -282,20 +361,9 @@ func main() {
 	}
 	// +kubebuilder:scaffold:builder
 
-	if metricsCertWatcher != nil {
-		setupLog.Info("Adding metrics certificate watcher to manager")
-		if err := mgr.Add(metricsCertWatcher); err != nil {
-			setupLog.Error(err, "unable to add metrics certificate watcher to manager")
-			os.Exit(1)
-		}
-	}
-
-	if webhookCertWatcher != nil {
-		setupLog.Info("Adding webhook certificate watcher to manager")
-		if err := mgr.Add(webhookCertWatcher); err != nil {
-			setupLog.Error(err, "unable to add webhook certificate watcher to manager")
-			os.Exit(1)
-		}
+	if err := addCertWatchers(mgr, metricsCertWatcher, webhookCertWatcher); err != nil {
+		setupLog.Error(err, "unable to add cert watchers to manager")
+		os.Exit(1)
 	}
 
 	if err := mgr.Add(funcCLIManager); err != nil {

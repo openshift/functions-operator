@@ -248,8 +248,8 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 			function.MarkMiddlewareNotUpToDateIntentionally("SkipMiddlewareUpdate", "Skipping middleware update as update is disabled (source: %s)", source)
 			// Don't return - continue to update deployment status
 		} else {
-			logger.Info("Function is not on latest middleware and middleware update is enabled. Will redeploy")
-			function.MarkMiddlewareNotUpToDate("MiddlewareOutdated", "Middleware is outdated, redeploying")
+			logger.Info(fmt.Sprintf("Function is not on latest middleware (%q vs %q) and middleware update is enabled. Will redeploy", latestMiddleware, functionDescribe.Middleware.Version))
+			function.MarkMiddlewareNotUpToDate("MiddlewareOutdated", "Middleware is outdated (%s available), redeploying...", latestMiddleware)
 
 			function.Status.Middleware.PendingRebuild = true
 
@@ -271,7 +271,7 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 			function.Status.Middleware.Available = nil // if function is on latest, we don't need to show this field
 		}
 	} else {
-		logger.Info("Function is deployed with latest middleware. No need to redeploy")
+		logger.Info(fmt.Sprintf("Function is deployed with latest middleware (%s). No need to redeploy", functionDescribe.Middleware.Version))
 		function.MarkMiddlewareUpToDate()
 		function.Status.Middleware.Available = nil // if function is on latest, we don't need to show this field
 	}

@@ -33,5 +33,5 @@ jobs:
         with:
           add_author_as_assignee: true
           auto_merge_method: "squash"
-          pull_title: [${target_branch}] ${pull_title}
+          pull_title: "[${target_branch}] ${pull_title}"
           pull_description: "Automated cherry-pick of #${pull_number} to ${target_branch}."

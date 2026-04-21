@@ -135,9 +135,10 @@ kubectl get function my-function -o yaml
 ```
 
 The status will include:
-- Function name and runtime
-- Middleware update conditions
-- Whether the function needs rebuilding due to outdated middleware
+- Function name and conditions
+- Git information (branch, commit, last checked time)
+- Deployment details (image, runtime, build time, deployer)
+- Middleware status (current and available versions, auto-update settings, pending rebuild status)
 
 ## Advanced Use Cases
 
@@ -292,8 +293,20 @@ make lint
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | string | Function name from metadata |
-| `runtime` | string | Detected function runtime |
 | `conditions` | array | Status conditions |
+| `git.resolvedBranch` | string | Git branch that is being monitored |
+| `git.observedCommit` | string | Latest Git commit SHA observed |
+| `git.lastChecked` | timestamp | Last time the repository was checked |
+| `deployment.image` | string | Container image of the deployed function |
+| `deployment.imageBuilt` | timestamp | When the current image was built |
+| `deployment.deployer` | string | Tool/method used to deploy the function (e.g., "func") |
+| `deployment.runtime` | string | Detected function runtime |
+| `middleware.current` | string | Current middleware version in use |
+| `middleware.available` | string | Latest available middleware version |
+| `middleware.autoUpdate.enabled` | boolean | Whether automatic middleware updates are enabled |
+| `middleware.autoUpdate.source` | string | Source of the autoUpdate setting ("function" or "operator") |
+| `middleware.pendingRebuild` | boolean | Whether a rebuild is pending due to outdated middleware |
+| `middleware.lastRebuild` | timestamp | Last time the function was rebuilt for middleware updates |
 
 ## Uninstallation
 

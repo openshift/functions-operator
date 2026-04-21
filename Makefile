@@ -193,12 +193,12 @@ build-installer: manifests generate kustomize yq ## Generate a consolidated YAML
 	mkdir -p dist
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	@if [ -n "$(VERSION_LABEL)" ] || [ -n "$(GIT_SHA_LABEL)" ]; then \
-		$(YQ) write --inplace config/default/kustomization.yaml 'labels[+].includeSelectors' true; \
+		$(YQ) eval -i '.labels = [{"includeSelectors": true, "pairs": {}}]' config/default/kustomization.yaml; \
 		if [ -n "$(VERSION_LABEL)" ]; then \
-			$(YQ) write --inplace config/default/kustomization.yaml 'labels[0].pairs[app.kubernetes.io/version]' '$(VERSION_LABEL)'; \
+			$(YQ) eval -i '.labels[0].pairs["app.kubernetes.io/version"] = "$(VERSION_LABEL)"' config/default/kustomization.yaml; \
 		fi; \
 		if [ -n "$(GIT_SHA_LABEL)" ]; then \
-			$(YQ) write --inplace config/default/kustomization.yaml 'labels[0].pairs[app.kubernetes.io/commit]' '$(GIT_SHA_LABEL)'; \
+			$(YQ) eval -i '.labels[0].pairs["app.kubernetes.io/commit"] = "$(GIT_SHA_LABEL)"' config/default/kustomization.yaml; \
 		fi; \
 	fi
 	$(KUSTOMIZE) build config/default > dist/install.yaml
@@ -290,7 +290,7 @@ ENVTEST_VERSION ?= $(shell go list -m -f "{{ .Version }}" sigs.k8s.io/controller
 ENVTEST_K8S_VERSION ?= $(shell go list -m -f "{{ .Version }}" k8s.io/api | awk -F'[v.]' '{printf "1.%d", $$3}')
 GOLANGCI_LINT_VERSION ?= v2.1.0
 MOCKERY_VERSION ?= v3.5.5
-YQ_VERSION ?= 3.4.1
+YQ_VERSION ?= v4.53.2
 
 .PHONY: kustomize
 kustomize: $(KUSTOMIZE) ## Download kustomize locally if necessary.

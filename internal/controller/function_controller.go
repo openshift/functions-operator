@@ -285,6 +285,16 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 	function.Status.Middleware.Current = functionDescribe.Middleware.Version
 
 	function.MarkDeployReady()
+
+	switch functionDescribe.Ready {
+	case "true":
+		function.MarkServiceReady()
+	case "false":
+		function.MarkServiceNotReady("ServiceNotReady", "Underlying service is not ready")
+	default:
+		function.MarkServiceNotReady("ServiceReadyUnknown", "Underlying service readiness is unknown")
+	}
+
 	return nil
 }
 

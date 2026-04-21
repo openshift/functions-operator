@@ -293,7 +293,7 @@ make lint
 | Field | Type | Description |
 |-------|------|-------------|
 | `name` | string | Function name from metadata |
-| `conditions` | array | Status conditions |
+| `conditions` | array | Status conditions (see below) |
 | `git.resolvedBranch` | string | Git branch that is being monitored |
 | `git.observedCommit` | string | Latest Git commit SHA observed |
 | `git.lastChecked` | timestamp | Last time the repository was checked |
@@ -307,6 +307,16 @@ make lint
 | `middleware.autoUpdate.source` | string | Source of the autoUpdate setting ("function" or "operator") |
 | `middleware.pendingRebuild` | boolean | Whether a rebuild is pending due to outdated middleware |
 | `middleware.lastRebuild` | timestamp | Last time the function was rebuilt for middleware updates |
+
+#### Status Conditions
+
+| Condition | Description                                                           |
+|-----------|-----------------------------------------------------------------------|
+| `Ready` | Summary condition that is `True` when all other conditions are `True` |
+| `SourceReady` | Git source was cloned and function metadata was read successfully     |
+| `Deployed` | Function is deployed                                                  |
+| `MiddlewareUpToDate` | Middleware is on the latest version (or intentionally skipped)        |
+| `ServiceReady` | Underlying service of the function is ready to serve traffic          |
 
 ## Uninstallation
 

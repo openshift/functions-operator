@@ -30,6 +30,7 @@ import (
 	"gopkg.in/yaml.v3"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/rand"
@@ -300,6 +301,81 @@ var _ = Describe("Function Controller", func() {
 					Expect(status.Middleware.AutoUpdate.Enabled).Should(BeTrue())
 					Expect(status.Middleware.AutoUpdate.Source).Should(Equal("function"))
 					Expect(status.Middleware.Available).Should(BeNil())
+				},
+			}),
+
+			Entry("should set ServiceReady condition to true when service is ready", reconcileTestCase{
+				spec: defaultSpec,
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+						Ready: "true",
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
+					cond := meta.FindStatusCondition(status.Conditions, functionsdevv1alpha1.TypeServiceReady)
+					Expect(cond).NotTo(BeNil())
+					Expect(cond.Status).To(Equal(metav1.ConditionTrue))
+					Expect(cond.Reason).To(Equal("ServiceReady"))
+
+					readyCond := meta.FindStatusCondition(status.Conditions, functionsdevv1alpha1.TypeReady)
+					Expect(readyCond).NotTo(BeNil())
+					Expect(readyCond.Status).To(Equal(metav1.ConditionTrue))
+				},
+			}),
+			Entry("should set ServiceReady condition to false when service is not ready", reconcileTestCase{
+				spec: defaultSpec,
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+						Ready: "false",
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
+					cond := meta.FindStatusCondition(status.Conditions, functionsdevv1alpha1.TypeServiceReady)
+					Expect(cond).NotTo(BeNil())
+					Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+					Expect(cond.Reason).To(Equal("ServiceNotReady"))
+
+					readyCond := meta.FindStatusCondition(status.Conditions, functionsdevv1alpha1.TypeReady)
+					Expect(readyCond).NotTo(BeNil())
+					Expect(readyCond.Status).To(Equal(metav1.ConditionFalse))
+				},
+			}),
+			Entry("should set ServiceReady condition to false with unknown reason when ready status is empty", reconcileTestCase{
+				spec: defaultSpec,
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
+					cond := meta.FindStatusCondition(status.Conditions, functionsdevv1alpha1.TypeServiceReady)
+					Expect(cond).NotTo(BeNil())
+					Expect(cond.Status).To(Equal(metav1.ConditionFalse))
+					Expect(cond.Reason).To(Equal("ServiceReadyUnknown"))
+
+					readyCond := meta.FindStatusCondition(status.Conditions, functionsdevv1alpha1.TypeReady)
+					Expect(readyCond).NotTo(BeNil())
+					Expect(readyCond.Status).To(Equal(metav1.ConditionFalse))
 				},
 			}),
 		)

@@ -20,12 +20,16 @@ const (
 
 	// TypeMiddlewareUpToDate indicates middleware is current
 	TypeMiddlewareUpToDate = "MiddlewareUpToDate"
+
+	// TypeServiceReady indicates the underlying service (e.g. Knative Service) is ready
+	TypeServiceReady = "ServiceReady"
 )
 
 var FunctionsConditions = []string{
 	TypeSourceReady,
 	TypeDeployed,
 	TypeMiddlewareUpToDate,
+	TypeServiceReady,
 }
 
 // InitializeConditions resets all conditions to ensure a fresh start for each reconcile.
@@ -189,6 +193,27 @@ func (f *Function) MarkMiddlewareNotUpToDateIntentionally(reason, messageFormat 
 	return meta.SetStatusCondition(&f.Status.Conditions, metav1.Condition{
 		Type:               TypeMiddlewareUpToDate,
 		Status:             metav1.ConditionTrue,
+		Reason:             reason,
+		Message:            fmt.Sprintf(messageFormat, messageA...),
+		ObservedGeneration: f.Generation,
+	})
+}
+
+// Service condition helpers
+
+func (f *Function) MarkServiceReady() bool {
+	return meta.SetStatusCondition(&f.Status.Conditions, metav1.Condition{
+		Type:               TypeServiceReady,
+		Status:             metav1.ConditionTrue,
+		Reason:             "ServiceReady",
+		ObservedGeneration: f.Generation,
+	})
+}
+
+func (f *Function) MarkServiceNotReady(reason, messageFormat string, messageA ...interface{}) bool {
+	return meta.SetStatusCondition(&f.Status.Conditions, metav1.Condition{
+		Type:               TypeServiceReady,
+		Status:             metav1.ConditionFalse,
 		Reason:             reason,
 		Message:            fmt.Sprintf(messageFormat, messageA...),
 		ObservedGeneration: f.Generation,

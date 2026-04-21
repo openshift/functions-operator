@@ -248,7 +248,8 @@ deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in
 .PHONY: deploy-debugger
 deploy-debugger: manifests kustomize ## Deploy debug controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${DEBUG_IMG}
-	$(KUSTOMIZE) build config/debug | $(KUBECTL) apply -f -
+	## Deploy debug controller without leader election
+	$(KUSTOMIZE) build config/debug | $(YQ) eval '(select(.kind == "Deployment") | .spec.template.spec.containers[0].args) -= ["--leader-elect"]' - | $(KUBECTL) apply -f -
 	$(MAKE) patch-registry-cert
 
 .PHONY: undeploy

@@ -61,6 +61,30 @@ jobs:
       - name: Install func-operator
         run: make docker-build docker-push deploy
 
+      - name: Pre-pull builder images to avoid parallel pull contention
+        run: |
+          # Pre-pull builder images before tests run in parallel to avoid:
+          # - Network bandwidth saturation (multiple 1-3GB pulls)
+          # - Disk I/O contention
+          # - Container runtime lock contention
+
+          if [ "${{ matrix.builder }}" = "s2i" ]; then
+            echo "Pre-pulling S2I builder images..."
+            docker pull registry.access.redhat.com/ubi8/go-toolset:latest
+            # for now we only download the go image, as we only use this in the e2e tests
+          
+            kind load docker-image registry.access.redhat.com/ubi8/go-toolset:latest
+          elif [ "${{ matrix.builder }}" = "pack" ]; then
+            echo "Pre-pulling pack builder images..."
+            docker pull ghcr.io/knative/builder-jammy-base:v2
+            docker pull ghcr.io/knative/builder-jammy-tiny:v2
+
+            kind load docker-image ghcr.io/knative/builder-jammy-base:v2
+            kind load docker-image ghcr.io/knative/builder-jammy-tiny:v2
+          fi
+
+          echo "Builder images cached in KinD cluster"
+
       - name: Running e2e Tests
         env:
           REGISTRY_INSECURE: true

@@ -13,7 +13,6 @@ REGISTRY_NAME="kind-registry"
 REGISTRY_PORT=${REGISTRY_PORT:-"5001"}
 
 SERVING_VERSION="v1.21.0"
-EVENTING_VERSION="v1.21.0"
 TEKTON_VERSION="v1.11.0"
 KEDA_VERSION="v2.19.0"
 KEDA_HTTP_ADDON_VERSION="v0.13.0"
@@ -147,15 +146,6 @@ function install_knative_serving() {
   kubectl wait deployment --all --timeout=-1s --for=condition=Available -n kourier-system
 }
 
-function install_knative_eventing() {
-  header_text "Installing Knative Eventing..."
-  kubectl apply -f https://github.com/knative/eventing/releases/download/knative-${EVENTING_VERSION}/eventing-crds.yaml
-  kubectl apply -f https://github.com/knative/eventing/releases/download/knative-${EVENTING_VERSION}/eventing-core.yaml
-
-  header_text "Waiting for Knative Eventing to be ready..."
-  kubectl wait deployment --all --timeout=-1s --for=condition=Available -n knative-eventing
-}
-
 function install_keda() {
   header_text "Installing keda"
   kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/${KEDA_VERSION}/keda-${KEDA_VERSION:1}.yaml
@@ -218,7 +208,6 @@ create_kind_cluster
 connect_registry_to_cluster
 install_tekton
 install_knative_serving
-install_knative_eventing
 install_keda
 install_gitea
 

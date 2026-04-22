@@ -219,6 +219,7 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 		return fmt.Errorf("failed to describe function to get image details: %w", err)
 	}
 	function.Status.Deployment.Image = functionDescribe.Image
+	markServiceStatus(functionDescribe.Ready, function)
 
 	isMiddlewareUpdateEnabled, source, err := r.isMiddlewareUpdateEnabled(ctx, function)
 	if err != nil {
@@ -285,10 +286,15 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 	}
 	function.Status.Deployment.Image = functionDescribe.Image
 	function.Status.Middleware.Current = functionDescribe.Middleware.Version
+	markServiceStatus(functionDescribe.Ready, function)
 
 	function.MarkDeployReady()
 
-	switch functionDescribe.Ready {
+	return nil
+}
+
+func markServiceStatus(ready string, function *v1alpha1.Function) {
+	switch strings.ToLower(ready) {
 	case "true":
 		function.MarkServiceReady()
 	case "false":
@@ -296,8 +302,6 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 	default:
 		function.MarkServiceNotReady("ServiceReadyUnknown", "Underlying service readiness is unknown")
 	}
-
-	return nil
 }
 
 func (r *FunctionReconciler) setupPipelineRBAC(ctx context.Context, function *v1alpha1.Function) error {

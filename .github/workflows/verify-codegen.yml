@@ -5,6 +5,10 @@ on:
   workflow_dispatch:
   merge_group:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     name: Verify Codegen

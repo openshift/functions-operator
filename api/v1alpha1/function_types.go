@@ -76,9 +76,15 @@ type FunctionStatus struct {
 
 	Conditions []metav1.Condition `json:"conditions,omitempty"`
 
-	Git        FunctionStatusGit        `json:"git,omitempty"`
-	Deployment FunctionStatusDeployment `json:"deployment,omitempty"`
-	Middleware FunctionStatusMiddleware `json:"middleware,omitempty"`
+	Git        FunctionStatusGit            `json:"git,omitempty"`
+	Deployment FunctionStatusDeployment     `json:"deployment,omitempty"`
+	Middleware FunctionStatusMiddleware     `json:"middleware,omitempty"`
+	History    []FunctionStatusHistoryEntry `json:"history,omitempty"`
+}
+
+type FunctionStatusHistoryEntry struct {
+	Time    metav1.Time `json:"time"`
+	Message string      `json:"message"`
 }
 
 type FunctionStatusGit struct {

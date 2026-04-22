@@ -266,6 +266,8 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 			function.Status.Middleware.PendingRebuild = false
 			function.Status.Middleware.LastRebuild = metav1.Now()
 
+			function.RecordHistoryEvent(fmt.Sprintf("Middleware updated from %q to %q", functionDescribe.Middleware.Version, latestMiddleware))
+
 			// After successful deployment, middleware is now up-to-date
 			function.MarkMiddlewareUpToDate()
 			function.Status.Middleware.Available = nil // if function is on latest, we don't need to show this field

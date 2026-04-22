@@ -354,6 +354,49 @@ var _ = Describe("Function Controller", func() {
 					Expect(readyCond.Status).To(Equal(metav1.ConditionFalse))
 				},
 			}),
+			Entry("should record history event when middleware is redeployed", reconcileTestCase{
+				spec: defaultSpec,
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v2.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+					funcMock.EXPECT().Deploy(mock.Anything, mock.Anything, resourceNamespace, funccli.DeployOptions{}).Return(nil)
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
+					messages := make([]string, len(status.History))
+					for i, entry := range status.History {
+						messages[i] = entry.Message
+					}
+					Expect(messages).To(ContainElement(`Middleware updated from "v1.0.0" to "v2.0.0"`))
+				},
+			}),
+			Entry("should not record middleware history event when middleware is already up to date", reconcileTestCase{
+				spec: defaultSpec,
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
+					messages := make([]string, len(status.History))
+					for i, entry := range status.History {
+						messages[i] = entry.Message
+					}
+					Expect(messages).ToNot(ContainElement(ContainSubstring("Middleware updated")))
+				},
+			}),
 			Entry("should set ServiceReady condition to false with unknown reason when ready status is empty", reconcileTestCase{
 				spec: defaultSpec,
 				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {

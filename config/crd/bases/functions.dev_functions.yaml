@@ -187,6 +187,19 @@ spec:
                   resolvedBranch:
                     type: string
                 type: object
+              history:
+                items:
+                  properties:
+                    message:
+                      type: string
+                    time:
+                      format: date-time
+                      type: string
+                  required:
+                  - message
+                  - time
+                  type: object
+                type: array
               middleware:
                 properties:
                   autoUpdate:

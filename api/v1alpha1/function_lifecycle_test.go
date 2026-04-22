@@ -1,11 +1,106 @@
 package v1alpha1
 
 import (
+	"fmt"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+func TestRecordHistoryEvent(t *testing.T) {
+	tests := []struct {
+		name            string
+		existingHistory []FunctionStatusHistoryEntry
+		newMessage      string
+		expectedLen     int
+		expectedFirst   string
+		expectedLast    string
+	}{
+		{
+			name:            "adds event to empty history",
+			existingHistory: nil,
+			newMessage:      "Function deployed",
+			expectedLen:     1,
+			expectedFirst:   "Function deployed",
+			expectedLast:    "Function deployed",
+		},
+		{
+			name: "prepends event to existing history",
+			existingHistory: []FunctionStatusHistoryEntry{
+				{Time: metav1.Now(), Message: "Older event"},
+			},
+			newMessage:    "Newer event",
+			expectedLen:   2,
+			expectedFirst: "Newer event",
+			expectedLast:  "Older event",
+		},
+		{
+			name: "trims oldest entries when exceeding max",
+			existingHistory: func() []FunctionStatusHistoryEntry {
+				entries := make([]FunctionStatusHistoryEntry, MaxHistoryEntries)
+				for i := range entries {
+					entries[i] = FunctionStatusHistoryEntry{
+						Time:    metav1.Now(),
+						Message: fmt.Sprintf("Event %d", i),
+					}
+				}
+				return entries
+			}(),
+			newMessage:    "Overflow event",
+			expectedLen:   MaxHistoryEntries,
+			expectedFirst: "Overflow event",
+			expectedLast:  fmt.Sprintf("Event %d", MaxHistoryEntries-2),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			f := &Function{}
+			f.Status.History = tt.existingHistory
+
+			f.RecordHistoryEvent(tt.newMessage)
+
+			if len(f.Status.History) != tt.expectedLen {
+				t.Errorf("expected %d entries, got %d", tt.expectedLen, len(f.Status.History))
+			}
+			if f.Status.History[0].Message != tt.expectedFirst {
+				t.Errorf("expected first message %q, got %q", tt.expectedFirst, f.Status.History[0].Message)
+			}
+			if f.Status.History[len(f.Status.History)-1].Message != tt.expectedLast {
+				t.Errorf("expected last message %q, got %q", tt.expectedLast, f.Status.History[len(f.Status.History)-1].Message)
+			}
+		})
+	}
+}
+
+func TestRecordHistoryEventFIFOOrder(t *testing.T) {
+	f := &Function{}
+
+	for i := 0; i < MaxHistoryEntries+5; i++ {
+		f.RecordHistoryEvent(fmt.Sprintf("Event %d", i))
+	}
+
+	if len(f.Status.History) != MaxHistoryEntries {
+		t.Fatalf("expected %d entries, got %d", MaxHistoryEntries, len(f.Status.History))
+	}
+
+	for i, entry := range f.Status.History {
+		expected := fmt.Sprintf("Event %d", MaxHistoryEntries+4-i)
+		if entry.Message != expected {
+			t.Errorf("entry %d: expected message %q, got %q", i, expected, entry.Message)
+		}
+	}
+}
+
+func TestRecordHistoryEventSetsTime(t *testing.T) {
+	f := &Function{}
+	f.RecordHistoryEvent("test event")
+
+	if f.Status.History[0].Time.IsZero() {
+		t.Error("expected non-zero time")
+	}
+}
 
 func TestCalculateReadyCondition(t *testing.T) {
 	tests := []struct {

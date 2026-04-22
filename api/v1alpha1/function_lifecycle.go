@@ -219,3 +219,17 @@ func (f *Function) MarkServiceNotReady(reason, messageFormat string, messageA ..
 		ObservedGeneration: f.Generation,
 	})
 }
+
+// History helpers
+
+const MaxHistoryEntries = 20
+
+func (f *Function) RecordHistoryEvent(message string) {
+	f.Status.History = append([]FunctionStatusHistoryEntry{{
+		Time:    metav1.Now(),
+		Message: message,
+	}}, f.Status.History...)
+	if len(f.Status.History) > MaxHistoryEntries {
+		f.Status.History = f.Status.History[:MaxHistoryEntries]
+	}
+}

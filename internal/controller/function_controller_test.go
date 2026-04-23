@@ -79,8 +79,10 @@ var _ = Describe("Function Controller", func() {
 
 		type reconcileTestCase struct {
 			spec           functionsdevv1alpha1.FunctionSpec
+			annotations    map[string]string
 			configureMocks func(*funccli.MockManager, *git.MockManager)
 			statusChecks   func(*functionsdevv1alpha1.FunctionStatus)
+			functionChecks func(*functionsdevv1alpha1.Function)
 			operatorConfig map[string]string
 		}
 
@@ -89,6 +91,16 @@ var _ = Describe("Function Controller", func() {
 				By("creating the Function")
 				err := createFunctionResource(resourceName, resourceNamespace, tc.spec)
 				Expect(err).NotTo(HaveOccurred())
+
+				if tc.annotations != nil {
+					By("Adding annotations to the Function")
+					f := &functionsdevv1alpha1.Function{}
+					err = k8sClient.Get(ctx, typeNamespacedName, f)
+					Expect(err).NotTo(HaveOccurred())
+					f.SetAnnotations(tc.annotations)
+					err = k8sClient.Update(ctx, f)
+					Expect(err).NotTo(HaveOccurred())
+				}
 
 				By("Setting up mocks")
 				funcCliManagerMock := funccli.NewMockManager(GinkgoT())
@@ -126,6 +138,14 @@ var _ = Describe("Function Controller", func() {
 					Expect(err).NotTo(HaveOccurred())
 
 					tc.statusChecks(&f.Status)
+				}
+
+				if tc.functionChecks != nil {
+					f := &functionsdevv1alpha1.Function{}
+					err := k8sClient.Get(ctx, typeNamespacedName, f)
+					Expect(err).NotTo(HaveOccurred())
+
+					tc.functionChecks(f)
 				}
 			},
 			Entry("should deploy when middleware update required", reconcileTestCase{
@@ -395,6 +415,52 @@ var _ = Describe("Function Controller", func() {
 						messages[i] = entry.Message
 					}
 					Expect(messages).ToNot(ContainElement(ContainSubstring("Middleware updated")))
+				},
+			}),
+			Entry("should remove func annotations after successful reconcile", reconcileTestCase{
+				spec: defaultSpec,
+				annotations: map[string]string{
+					"functions.knative.dev/rebuild": "true",
+					"other-annotation":              "keep-me",
+				},
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				functionChecks: func(f *functionsdevv1alpha1.Function) {
+					annotations := f.GetAnnotations()
+					Expect(annotations).NotTo(HaveKey("functions.knative.dev/rebuild"))
+					Expect(annotations).To(HaveKeyWithValue("other-annotation", "keep-me"))
+				},
+			}),
+			Entry("should remove multiple func annotations after successful reconcile", reconcileTestCase{
+				spec: defaultSpec,
+				annotations: map[string]string{
+					"functions.knative.dev/rebuild": "true",
+					"functions.knative.dev/reason":  "config-change",
+				},
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				functionChecks: func(f *functionsdevv1alpha1.Function) {
+					annotations := f.GetAnnotations()
+					Expect(annotations).NotTo(HaveKey("functions.knative.dev/rebuild"))
+					Expect(annotations).NotTo(HaveKey("functions.knative.dev/reason"))
 				},
 			}),
 			Entry("should set ServiceReady condition to false with unknown reason when ready status is empty", reconcileTestCase{

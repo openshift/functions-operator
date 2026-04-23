@@ -32,6 +32,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/tools/events"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/utils/ptr"
 	funcfn "knative.dev/func/pkg/functions"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -116,8 +117,36 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, reconcileErr
 	}
 
+	if err := r.removeFuncAnnotations(ctx, function); err != nil {
+		logger.Error(err, "Failed to remove func annotations")
+		return ctrl.Result{}, err
+	}
+
 	logger.Info("Reconciliation complete")
 	return ctrl.Result{}, nil
+}
+
+func (r *FunctionReconciler) removeFuncAnnotations(ctx context.Context, function *v1alpha1.Function) error {
+	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		latest := &v1alpha1.Function{}
+		if err := r.Get(ctx, types.NamespacedName{Name: function.Name, Namespace: function.Namespace}, latest); err != nil {
+			return err
+		}
+
+		if !hasFuncAnnotations(latest) {
+			return nil
+		}
+
+		annotations := latest.GetAnnotations()
+		for key := range annotations {
+			if strings.HasPrefix(key, funcAnnotationPrefix) {
+				delete(annotations, key)
+			}
+		}
+
+		latest.SetAnnotations(annotations)
+		return r.Update(ctx, latest)
+	})
 }
 
 func (r *FunctionReconciler) reconcile(ctx context.Context, function *v1alpha1.Function) error {
@@ -525,10 +554,11 @@ func (r *FunctionReconciler) isDeployed(ctx context.Context, name, namespace str
 // SetupWithManager sets up the controller with the Manager.
 func (r *FunctionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
-		// Only reconcile Functions when their spec changes (not on status updates).
-		// This predicate is applied to For() instead of WithEventFilter() to ensure
-		// it doesn't filter out ConfigMap-triggered reconciliations.
-		For(&v1alpha1.Function{}, builder.WithPredicates(predicate.GenerationChangedPredicate{})).
+		// Reconcile Functions on spec changes (generation change) or when
+		// "functions.knative.dev/" annotations are present. This predicate is applied
+		// to For() instead of WithEventFilter() to ensure it doesn't filter out
+		// ConfigMap-triggered reconciliations.
+		For(&v1alpha1.Function{}, builder.WithPredicates(predicate.Or(predicate.GenerationChangedPredicate{}, FuncAnnotationChangedPredicate{}))).
 		Watches(
 			&v1.ConfigMap{},
 			handler.EnqueueRequestsFromMapFunc(r.findFunctionsForConfigMap),

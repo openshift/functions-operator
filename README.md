@@ -165,6 +165,16 @@ spec:
 
 The operator will clone the repository and use the specified path as the function root directory.
 
+### Triggering a Reconciliation
+
+The operator normally reconciles a Function when its spec changes. To trigger a reconciliation manually, add any annotation with the `functions.knative.dev/` prefix:
+
+```bash
+kubectl annotate function my-function functions.knative.dev/reconcile=true
+```
+
+The operator will reconcile the Function and automatically remove the annotation afterwards.
+
 ### Configuring Automatic Middleware Updates
 
 The operators main responsibility it to rebuild functions when outdated middleware is detected. Anyhow this behavior can be enabled/disabled at two levels:

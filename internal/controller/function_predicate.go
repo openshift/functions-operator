@@ -24,8 +24,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
-const funcAnnotationPrefix = "functions.knative.dev/"
-
 // FuncAnnotationChangedPredicate triggers reconciliation when annotations
 // with the "functions.knative.dev/" prefix are added or changed.
 type FuncAnnotationChangedPredicate struct {

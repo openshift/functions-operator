@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/functions-dev/func-operator/internal/funccli"
 	"github.com/functions-dev/func-operator/internal/git"
@@ -461,6 +462,29 @@ var _ = Describe("Function Controller", func() {
 					annotations := f.GetAnnotations()
 					Expect(annotations).NotTo(HaveKey("functions.knative.dev/rebuild"))
 					Expect(annotations).NotTo(HaveKey("functions.knative.dev/reason"))
+				},
+			}),
+
+			Entry("should add last-deployed annotation in deployment status details", reconcileTestCase{
+				spec: defaultSpec,
+				annotations: map[string]string{
+					funcAnnotationLastDeployed: "2026-01-02T15:04:05+06:00",
+				},
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
+					funcMock.EXPECT().GetMiddlewareVersion(mock.Anything, functionName, resourceNamespace).Return("v1.0.0", nil)
+
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
+					expectedTime, err := time.Parse(time.RFC3339, "2026-01-02T15:04:05+06:00")
+					Expect(err).NotTo(HaveOccurred())
+					Expect(status.Deployment.ImageBuilt.UTC()).To(Equal(expectedTime.UTC()))
 				},
 			}),
 			Entry("should set ServiceReady condition to false with unknown reason when ready status is empty", reconcileTestCase{

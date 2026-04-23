@@ -22,6 +22,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/functions-dev/func-operator/internal/funccli"
 	fn "github.com/functions-dev/func-operator/internal/function"
@@ -52,6 +53,9 @@ import (
 const (
 	deployFunctionRoleName = "func-operator-deploy-function"
 	controllerConfigName   = "func-operator-controller-config"
+
+	funcAnnotationPrefix       = "functions.knative.dev/"
+	funcAnnotationLastDeployed = funcAnnotationPrefix + "last-deployed"
 )
 
 // FunctionReconciler reconciles a Function object
@@ -160,6 +164,16 @@ func (r *FunctionReconciler) reconcile(ctx context.Context, function *v1alpha1.F
 	defer repo.Cleanup()
 
 	function.Status.Name = metadata.Name
+
+	if val, ok := function.Annotations[funcAnnotationLastDeployed]; ok {
+		t, err := time.Parse(time.RFC3339, val)
+		if err != nil {
+			// log a warning, but don't return error, as this can't resolve on its own
+			log.FromContext(ctx).Info("could not parse "+funcAnnotationLastDeployed+" annotation", "error", err)
+		} else {
+			function.Status.Deployment.ImageBuilt = metav1.NewTime(t)
+		}
+	}
 
 	if err := r.ensureDeployment(ctx, function, repo, metadata); err != nil {
 		return fmt.Errorf("deploying function failed: %w", err)
@@ -295,6 +309,7 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 
 			function.Status.Middleware.PendingRebuild = false
 			function.Status.Middleware.LastRebuild = metav1.Now()
+			function.Status.Deployment.ImageBuilt = metav1.Now()
 
 			function.RecordHistoryEvent(fmt.Sprintf("Middleware updated from %q to %q", functionDescribe.Middleware.Version, latestMiddleware))
 

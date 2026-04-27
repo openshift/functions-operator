@@ -23,6 +23,7 @@ import (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:resource:shortName=func
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status",description="Ready status"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].reason",description="Ready reason"
 // +kubebuilder:printcolumn:name="Middleware",type="string",JSONPath=".status.middleware.current",description="Current deployed Middleware Version"

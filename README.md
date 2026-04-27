@@ -128,10 +128,18 @@ spec:
 
 ### Check Function Status
 
-View the middleware status of your function:
+The Function CRD has the short name `func`, so you can use `kubectl get func` instead of `kubectl get function`.
+
+Get an overview of all functions including their middleware version and pending rebuild status:
 
 ```bash
-kubectl get function my-function -o yaml
+kubectl get func
+```
+
+View the full status of a specific function:
+
+```bash
+kubectl get func my-function -o yaml
 ```
 
 The status will include:

@@ -251,16 +251,18 @@ type middlewareCheck interface {
 }
 
 type middlewareUpToDate struct {
-	currentImage   string
-	serviceReady   string
-	currentVersion string
-	autoUpdate     autoUpdateStatus
+	currentImage    string
+	currentRevision string
+	serviceReady    string
+	currentVersion  string
+	autoUpdate      autoUpdateStatus
 }
 
 func (middlewareUpToDate) middlewareCheck() {}
 
 type middlewareOutdated struct {
 	currentImage     string
+	currentRevision  string
 	serviceReady     string
 	currentVersion   string
 	availableVersion string
@@ -292,15 +294,17 @@ func (r *FunctionReconciler) checkMiddlewareState(ctx context.Context, function 
 
 	if latestVersion == desc.Middleware.Version {
 		return middlewareUpToDate{
-			currentImage:   desc.Image,
-			serviceReady:   desc.Ready,
-			currentVersion: desc.Middleware.Version,
-			autoUpdate:     autoUpdate,
+			currentImage:    desc.Image,
+			currentRevision: desc.Revision,
+			serviceReady:    desc.Ready,
+			currentVersion:  desc.Middleware.Version,
+			autoUpdate:      autoUpdate,
 		}, nil
 	}
 
 	return middlewareOutdated{
 		currentImage:     desc.Image,
+		currentRevision:  desc.Revision,
 		serviceReady:     desc.Ready,
 		currentVersion:   desc.Middleware.Version,
 		availableVersion: latestVersion,
@@ -330,6 +334,7 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 	case middlewareUpToDate:
 		logger.Info("Function is on latest middleware. No redeploy needed", "version", check.currentVersion)
 		function.Status.Deployment.Image = check.currentImage
+		function.Status.Deployment.Revision = check.currentRevision
 		function.Status.Middleware.Current = check.currentVersion
 		function.Status.Middleware.AutoUpdate.Enabled = check.autoUpdate.enabled
 		function.Status.Middleware.AutoUpdate.Source = check.autoUpdate.source
@@ -339,6 +344,7 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 
 	case middlewareOutdated:
 		function.Status.Deployment.Image = check.currentImage
+		function.Status.Deployment.Revision = check.currentRevision
 		function.Status.Middleware.Current = check.currentVersion
 		function.Status.Middleware.AutoUpdate.Enabled = check.autoUpdate.enabled
 		function.Status.Middleware.AutoUpdate.Source = check.autoUpdate.source

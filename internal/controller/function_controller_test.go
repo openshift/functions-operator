@@ -228,7 +228,8 @@ var _ = Describe("Function Controller", func() {
 						Middleware: functions.Middleware{
 							Version: "v1.0.0",
 						},
-						Image: "my-image:v1.2.3",
+						Image:    "my-image:v1.2.3",
+						Revision: "my-revision",
 					}, nil)
 					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
 
@@ -241,6 +242,7 @@ var _ = Describe("Function Controller", func() {
 				},
 				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
 					Expect(status.Deployment.Image).Should(Equal("my-image:v1.2.3"))
+					Expect(status.Deployment.Revision).Should(Equal("my-revision"))
 					Expect(status.Deployment.Deployer).Should(Equal("keda"))
 					Expect(status.Deployment.Runtime).Should(Equal("node"))
 				},

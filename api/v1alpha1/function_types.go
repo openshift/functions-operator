@@ -99,6 +99,7 @@ type FunctionStatusGit struct {
 type FunctionStatusDeployment struct {
 	Image      string      `json:"image,omitempty"`
 	ImageBuilt metav1.Time `json:"imageBuilt,omitempty"`
+	Revision   string      `json:"revision,omitempty"`
 	Deployer   string      `json:"deployer,omitempty"`
 	Runtime    string      `json:"runtime,omitempty"`
 }

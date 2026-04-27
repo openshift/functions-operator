@@ -155,4 +155,4 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-replace knative.dev/func => knative.dev/func v0.47.1-0.20260421122411-87ce20dd94e4
+replace knative.dev/func => knative.dev/func v0.48.1-0.20260427113619-77707d1de8b6

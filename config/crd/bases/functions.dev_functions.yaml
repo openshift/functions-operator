@@ -184,6 +184,8 @@ spec:
                   imageBuilt:
                     format: date-time
                     type: string
+                  revision:
+                    type: string
                   runtime:
                     type: string
                 type: object

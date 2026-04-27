@@ -19,7 +19,6 @@ package controller
 import (
 	"context"
 	"fmt"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -28,7 +27,6 @@ import (
 	fn "github.com/functions-dev/func-operator/internal/function"
 	"github.com/functions-dev/func-operator/internal/git"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/api/equality"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -46,7 +44,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 
 	"github.com/functions-dev/func-operator/api/v1alpha1"
-	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 )
 
@@ -103,6 +100,7 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	}
 
 	function := original.DeepCopy()
+	function.SetDefaults(ctx)
 
 	// Create tracker and add to context
 	statusTracker := NewStatusTracker(r.Client, function)
@@ -121,13 +119,43 @@ func (r *FunctionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		return ctrl.Result{}, reconcileErr
 	}
 
-	if err := r.removeFuncAnnotations(ctx, function); err != nil {
-		logger.Error(err, "Failed to remove func annotations")
-		return ctrl.Result{}, err
-	}
-
 	logger.Info("Reconciliation complete")
 	return ctrl.Result{}, nil
+}
+
+func (r *FunctionReconciler) reconcile(ctx context.Context, function *v1alpha1.Function) error {
+	// Initialize conditions to start fresh each reconcile
+	function.InitializeConditions()
+
+	repo, metadata, err := r.prepareSource(ctx, function)
+	if err != nil {
+		return fmt.Errorf("prepare source failed: %w", err)
+	}
+	defer repo.Cleanup()
+
+	function.Status.Name = metadata.Name
+
+	if err := r.reconcileDeployment(ctx, function, repo, metadata); err != nil {
+		return fmt.Errorf("deploying function failed: %w", err)
+	}
+
+	if err := r.removeFuncAnnotations(ctx, function); err != nil {
+		return fmt.Errorf("failed to remove func annotations: %w", err)
+	}
+
+	return nil
+}
+
+func applyLastDeployedAnnotation(ctx context.Context, function *v1alpha1.Function) {
+	if val, ok := function.Annotations[funcAnnotationLastDeployed]; ok {
+		t, err := time.Parse(time.RFC3339, val)
+		if err != nil {
+			// log a warning, but don't return error, as this can't resolve on its own
+			log.FromContext(ctx).Info("could not parse "+funcAnnotationLastDeployed+" annotation", "error", err)
+		} else {
+			function.Status.Deployment.ImageBuilt = metav1.NewTime(t)
+		}
+	}
 }
 
 func (r *FunctionReconciler) removeFuncAnnotations(ctx context.Context, function *v1alpha1.Function) error {
@@ -153,46 +181,8 @@ func (r *FunctionReconciler) removeFuncAnnotations(ctx context.Context, function
 	})
 }
 
-func (r *FunctionReconciler) reconcile(ctx context.Context, function *v1alpha1.Function) error {
-	// Initialize conditions to start fresh each reconcile
-	function.InitializeConditions()
-
-	repo, metadata, err := r.prepareSource(ctx, function)
-	if err != nil {
-		return fmt.Errorf("prepare source failed: %w", err)
-	}
-	defer repo.Cleanup()
-
-	function.Status.Name = metadata.Name
-
-	if val, ok := function.Annotations[funcAnnotationLastDeployed]; ok {
-		t, err := time.Parse(time.RFC3339, val)
-		if err != nil {
-			// log a warning, but don't return error, as this can't resolve on its own
-			log.FromContext(ctx).Info("could not parse "+funcAnnotationLastDeployed+" annotation", "error", err)
-		} else {
-			function.Status.Deployment.ImageBuilt = metav1.NewTime(t)
-		}
-	}
-
-	if err := r.ensureDeployment(ctx, function, repo, metadata); err != nil {
-		return fmt.Errorf("deploying function failed: %w", err)
-	}
-
-	if err := FlushStatus(ctx, function); err != nil {
-		return fmt.Errorf("failed to update status: %w", err)
-	}
-
-	return nil
-}
-
 // prepareSource clones the git repository and retrieves function metadata
 func (r *FunctionReconciler) prepareSource(ctx context.Context, function *v1alpha1.Function) (*git.Repository, *funcfn.Function, error) {
-	branchReference := "main"
-	if function.Spec.Repository.Branch != "" {
-		branchReference = function.Spec.Repository.Branch
-	}
-
 	gitAuthSecret := v1.Secret{}
 	if function.Spec.Repository.AuthSecretRef != nil {
 		if err := r.Get(ctx, types.NamespacedName{Namespace: function.Namespace, Name: function.Spec.Repository.AuthSecretRef.Name}, &gitAuthSecret); err != nil {
@@ -201,7 +191,7 @@ func (r *FunctionReconciler) prepareSource(ctx context.Context, function *v1alph
 		}
 	}
 
-	repo, err := r.GitManager.CloneRepository(ctx, function.Spec.Repository.URL, function.Spec.Repository.Path, branchReference, gitAuthSecret.Data)
+	repo, err := r.GitManager.CloneRepository(ctx, function.Spec.Repository.URL, function.Spec.Repository.Path, function.Spec.Repository.Branch, gitAuthSecret.Data)
 	if err != nil {
 		function.MarkSourceNotReady("GitCloneFailed", "Failed to clone repository: %s", err.Error())
 		return nil, nil, fmt.Errorf("failed to setup git repository: %w", err)
@@ -223,8 +213,7 @@ func (r *FunctionReconciler) prepareSource(ctx context.Context, function *v1alph
 	return repo, &metadata, nil
 }
 
-// ensureDeployment ensures the function is deployed and up-to-date
-func (r *FunctionReconciler) ensureDeployment(ctx context.Context, function *v1alpha1.Function, repo *git.Repository, metadata *funcfn.Function) error {
+func (r *FunctionReconciler) reconcileDeployment(ctx context.Context, function *v1alpha1.Function, repo *git.Repository, metadata *funcfn.Function) error {
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling Function")
 
@@ -248,56 +237,123 @@ func (r *FunctionReconciler) ensureDeployment(ctx context.Context, function *v1a
 	}
 	function.Status.Deployment.Deployer = deployer
 	function.Status.Deployment.Runtime = metadata.Runtime
+	applyLastDeployedAnnotation(ctx, function)
 
 	// Function is deployed - check middleware version
 	return r.handleMiddlewareUpdate(ctx, function, repo, metadata)
+}
+
+// middlewareCheck is a sealed interface representing the result of inspecting a function's
+// middleware state. Implementations (middlewareUpToDate, middlewareOutdated) carry only the
+// fields relevant to their case, so the caller can type-switch without inspecting irrelevant data.
+type middlewareCheck interface {
+	middlewareCheck()
+}
+
+type middlewareUpToDate struct {
+	currentImage   string
+	serviceReady   string
+	currentVersion string
+	autoUpdate     autoUpdateStatus
+}
+
+func (middlewareUpToDate) middlewareCheck() {}
+
+type middlewareOutdated struct {
+	currentImage     string
+	serviceReady     string
+	currentVersion   string
+	availableVersion string
+	autoUpdate       autoUpdateStatus
+}
+
+func (middlewareOutdated) middlewareCheck() {}
+
+type autoUpdateStatus struct {
+	enabled bool
+	source  string // "function" or "operator"
+}
+
+func (r *FunctionReconciler) checkMiddlewareState(ctx context.Context, function *v1alpha1.Function, metadata *funcfn.Function) (middlewareCheck, error) {
+	desc, err := r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
+	if err != nil {
+		return nil, fmt.Errorf("failed to describe function: %w", err)
+	}
+
+	autoUpdate, err := r.getAutoUpdateStatus(ctx, function)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check middleware update setting: %w", err)
+	}
+
+	latestVersion, err := r.FuncCliManager.GetLatestMiddlewareVersion(ctx, metadata.Runtime, metadata.Invoke)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest middleware version: %w", err)
+	}
+
+	if latestVersion == desc.Middleware.Version {
+		return middlewareUpToDate{
+			currentImage:   desc.Image,
+			serviceReady:   desc.Ready,
+			currentVersion: desc.Middleware.Version,
+			autoUpdate:     autoUpdate,
+		}, nil
+	}
+
+	return middlewareOutdated{
+		currentImage:     desc.Image,
+		serviceReady:     desc.Ready,
+		currentVersion:   desc.Middleware.Version,
+		availableVersion: latestVersion,
+		autoUpdate:       autoUpdate,
+	}, nil
+}
+
+func (r *FunctionReconciler) getAutoUpdateStatus(ctx context.Context, function *v1alpha1.Function) (autoUpdateStatus, error) {
+	enabled, source, err := r.isMiddlewareUpdateEnabled(ctx, function)
+	if err != nil {
+		return autoUpdateStatus{}, err
+	}
+	return autoUpdateStatus{enabled: enabled, source: source}, nil
 }
 
 // handleMiddlewareUpdate checks if the function is using the latest middleware and redeploys if needed
 func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, function *v1alpha1.Function, repo *git.Repository, metadata *funcfn.Function) error {
 	logger := log.FromContext(ctx)
 
-	functionDescribe, err := r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
+	check, err := r.checkMiddlewareState(ctx, function, metadata)
 	if err != nil {
-		return fmt.Errorf("failed to describe function to get image details: %w", err)
-	}
-	function.Status.Deployment.Image = functionDescribe.Image
-	markServiceStatus(functionDescribe.Ready, function)
-
-	isMiddlewareUpdateEnabled, source, err := r.isMiddlewareUpdateEnabled(ctx, function)
-	if err != nil {
-		function.MarkMiddlewareNotUpToDate("MiddlewareCheckFailed", "Failed to check if middleware should be updated: %s", err)
-		return fmt.Errorf("failed to check if middleware should be updated: %w", err)
-	}
-	function.Status.Middleware.AutoUpdate.Enabled = isMiddlewareUpdateEnabled
-	function.Status.Middleware.AutoUpdate.Source = source
-	function.Status.Middleware.Current = functionDescribe.Middleware.Version
-	function.Status.Middleware.PendingRebuild = false
-
-	isOnLatestMiddleware, err := r.isMiddlewareLatest(ctx, metadata, function.Namespace)
-	if err != nil {
-		function.MarkMiddlewareNotUpToDate("MiddlewareCheckFailed", "Failed to check middleware version: %s", err.Error())
-		return fmt.Errorf("failed to check if function is using latest middleware: %w", err)
+		function.MarkMiddlewareNotUpToDate("MiddlewareCheckFailed", "Failed to check middleware: %s", err)
+		return err
 	}
 
-	if !isOnLatestMiddleware {
-		latestMiddleware, err := r.FuncCliManager.GetLatestMiddlewareVersion(ctx, metadata.Runtime, metadata.Invoke)
-		if err != nil {
-			return fmt.Errorf("failed to get latest available middleware version: %w", err)
-		}
-		function.Status.Middleware.Available = ptr.To(latestMiddleware)
+	switch check := check.(type) {
+	case middlewareUpToDate:
+		logger.Info("Function is on latest middleware. No redeploy needed", "version", check.currentVersion)
+		function.Status.Deployment.Image = check.currentImage
+		function.Status.Middleware.Current = check.currentVersion
+		function.Status.Middleware.AutoUpdate.Enabled = check.autoUpdate.enabled
+		function.Status.Middleware.AutoUpdate.Source = check.autoUpdate.source
+		function.Status.Middleware.PendingRebuild = false
+		markServiceStatus(check.serviceReady, function)
+		function.MarkMiddlewareUpToDate()
 
-		if !isMiddlewareUpdateEnabled {
+	case middlewareOutdated:
+		function.Status.Deployment.Image = check.currentImage
+		function.Status.Middleware.Current = check.currentVersion
+		function.Status.Middleware.AutoUpdate.Enabled = check.autoUpdate.enabled
+		function.Status.Middleware.AutoUpdate.Source = check.autoUpdate.source
+		function.Status.Middleware.Available = ptr.To(check.availableVersion)
+		function.Status.Middleware.PendingRebuild = false
+		markServiceStatus(check.serviceReady, function)
+
+		if !check.autoUpdate.enabled {
 			logger.Info("Skipping middleware update, as middleware update is disabled")
-			function.MarkMiddlewareNotUpToDateIntentionally("SkipMiddlewareUpdate", "Skipping middleware update as update is disabled (source: %s)", source)
-			// Don't return - continue to update deployment status
+			function.MarkMiddlewareNotUpToDateIntentionally("SkipMiddlewareUpdate", "Skipping middleware update as update is disabled (source: %s)", check.autoUpdate.source)
 		} else {
-			logger.Info(fmt.Sprintf("Function is not on latest middleware (%q vs %q) and middleware update is enabled. Will redeploy", latestMiddleware, functionDescribe.Middleware.Version))
-			function.MarkMiddlewareNotUpToDate("MiddlewareOutdated", "Middleware is outdated (%s available), redeploying...", latestMiddleware)
-
+			logger.Info("Middleware outdated, redeploying", "current", check.currentVersion, "available", check.availableVersion)
+			function.MarkMiddlewareNotUpToDate("MiddlewareOutdated", "Middleware is outdated (%s available), redeploying...", check.availableVersion)
 			function.Status.Middleware.PendingRebuild = true
 
-			// Flush status before long deploy operation
 			if err := FlushStatus(ctx, function); err != nil {
 				logger.Error(err, "Failed to update status before redeployment")
 			}
@@ -307,33 +363,24 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 				return fmt.Errorf("failed to redeploy function: %w", err)
 			}
 
+			desc, err := r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
+			if err != nil {
+				return fmt.Errorf("failed to describe function after deploy: %w", err)
+			}
+			function.Status.Deployment.Image = desc.Image
+			function.Status.Middleware.Current = desc.Middleware.Version
 			function.Status.Middleware.PendingRebuild = false
 			function.Status.Middleware.LastRebuild = metav1.Now()
 			function.Status.Deployment.ImageBuilt = metav1.Now()
+			function.Status.Middleware.Available = nil
+			markServiceStatus(desc.Ready, function)
 
-			function.RecordHistoryEvent(fmt.Sprintf("Middleware updated from %q to %q", functionDescribe.Middleware.Version, latestMiddleware))
-
-			// After successful deployment, middleware is now up-to-date
+			function.RecordHistoryEvent(fmt.Sprintf("Middleware updated from %q to %q", check.currentVersion, check.availableVersion))
 			function.MarkMiddlewareUpToDate()
-			function.Status.Middleware.Available = nil // if function is on latest, we don't need to show this field
 		}
-	} else {
-		logger.Info(fmt.Sprintf("Function is deployed with latest middleware (%s). No need to redeploy", functionDescribe.Middleware.Version))
-		function.MarkMiddlewareUpToDate()
-		function.Status.Middleware.Available = nil // if function is on latest, we don't need to show this field
 	}
-
-	// Update deployment status
-	functionDescribe, err = r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
-	if err != nil {
-		return fmt.Errorf("failed to describe function to get image details: %w", err)
-	}
-	function.Status.Deployment.Image = functionDescribe.Image
-	function.Status.Middleware.Current = functionDescribe.Middleware.Version
-	markServiceStatus(functionDescribe.Ready, function)
 
 	function.MarkDeployReady()
-
 	return nil
 }
 
@@ -346,211 +393,6 @@ func markServiceStatus(ready string, function *v1alpha1.Function) {
 	default:
 		function.MarkServiceNotReady("ServiceReadyUnknown", "Underlying service readiness is unknown")
 	}
-}
-
-func (r *FunctionReconciler) setupPipelineRBAC(ctx context.Context, function *v1alpha1.Function) error {
-	if err := r.ensureDeployFunctionRole(ctx, function.Namespace); err != nil {
-		return fmt.Errorf("failed to ensure deploy-function role: %w", err)
-	}
-
-	if err := r.ensureDeployFunctionRoleBinding(ctx, function); err != nil {
-		return fmt.Errorf("failed to ensure deploy-function role binding: %w", err)
-	}
-
-	return nil
-}
-
-// ensureDeployFunctionRole ensures the deploy-function Role exists in the namespace and is up-to-date.
-// This is a namespace-scoped Role so multiple operator instances won't conflict.
-func (r *FunctionReconciler) ensureDeployFunctionRole(ctx context.Context, namespace string) error {
-	logger := log.FromContext(ctx)
-
-	// TODO: only add the rules which are needed for the functions deployer
-	expectedRole := &rbacv1.Role{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      deployFunctionRoleName,
-			Namespace: namespace,
-		},
-		Rules: []rbacv1.PolicyRule{
-			{
-				APIGroups: []string{"serving.knative.dev"},
-				Resources: []string{"services", "routes"},
-				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
-			}, {
-				APIGroups: []string{"eventing.knative.dev"},
-				Resources: []string{"triggers"},
-				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
-			}, {
-				APIGroups: []string{"apps"},
-				Resources: []string{"deployments", "replicasets"},
-				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
-			}, {
-				APIGroups: []string{""},
-				Resources: []string{"services", "pods"},
-				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
-			}, {
-				APIGroups: []string{"http.keda.sh"},
-				Resources: []string{"httpscaledobjects"},
-				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
-			},
-		},
-	}
-
-	foundRole := &rbacv1.Role{}
-	err := r.Get(ctx, types.NamespacedName{Name: expectedRole.Name, Namespace: expectedRole.Namespace}, foundRole)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			if err := r.Create(ctx, expectedRole); err != nil {
-				return fmt.Errorf("failed to create role: %w", err)
-			}
-			logger.Info("Created deploy-function role")
-			return nil
-		}
-		return fmt.Errorf("failed to get role: %w", err)
-	}
-
-	// Role exists - update if needed
-	if !equality.Semantic.DeepEqual(expectedRole.Rules, foundRole.Rules) {
-		foundRole.Rules = expectedRole.Rules
-		if err := r.Update(ctx, foundRole); err != nil {
-			return fmt.Errorf("failed to update role: %w", err)
-		}
-		logger.Info("Updated deploy-function role")
-	} else {
-		logger.Info("Deploy-function role already up to date")
-	}
-
-	return nil
-}
-
-// ensureDeployFunctionRoleBinding ensures the RoleBinding for the deploy-function role exists and is up-to-date.
-func (r *FunctionReconciler) ensureDeployFunctionRoleBinding(ctx context.Context, function *v1alpha1.Function) error {
-	logger := log.FromContext(ctx)
-
-	expectedRoleBinding := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "deploy-function-default",
-			Namespace: function.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: v1alpha1.GroupVersion.String(),
-					Kind:       "Function",
-					Name:       function.Name,
-					UID:        function.UID,
-					Controller: ptr.To(true),
-				},
-			},
-		},
-		Subjects: []rbacv1.Subject{{
-			Kind:      "ServiceAccount",
-			Name:      "default",
-			Namespace: function.Namespace,
-		}},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Kind:     "Role",
-			Name:     deployFunctionRoleName,
-		},
-	}
-
-	foundRoleBinding := &rbacv1.RoleBinding{}
-	err := r.Get(ctx, types.NamespacedName{Name: expectedRoleBinding.Name, Namespace: expectedRoleBinding.Namespace}, foundRoleBinding)
-	if err != nil {
-		if apierrors.IsNotFound(err) {
-			if err := r.Create(ctx, expectedRoleBinding); err != nil {
-				return fmt.Errorf("failed to create role binding: %w", err)
-			}
-			logger.Info("Created deploy-function role binding")
-			return nil
-		}
-		return fmt.Errorf("failed to get role binding: %w", err)
-	}
-
-	// Update if needed
-	if !equality.Semantic.DeepDerivative(expectedRoleBinding, foundRoleBinding) {
-		foundRoleBinding.Subjects = expectedRoleBinding.Subjects
-		foundRoleBinding.RoleRef = expectedRoleBinding.RoleRef
-		foundRoleBinding.OwnerReferences = expectedRoleBinding.OwnerReferences
-
-		if err := r.Update(ctx, foundRoleBinding); err != nil {
-			return fmt.Errorf("failed to update role binding: %w", err)
-		}
-		logger.Info("Updated deploy-function role binding")
-	} else {
-		logger.Info("Deploy-function role binding already up to date")
-	}
-
-	return nil
-}
-
-func (r *FunctionReconciler) persistRegistryAuthSecret(ctx context.Context, function *v1alpha1.Function) (string, error) {
-	logger := log.FromContext(ctx)
-
-	logger.Info("Persist registry auth secret temporarily")
-
-	authSecret := &v1.Secret{}
-	err := r.Get(ctx, types.NamespacedName{Name: function.Spec.Registry.AuthSecretRef.Name, Namespace: function.Namespace}, authSecret)
-	if err != nil {
-		logger.Error(err, "Failed to get registry auth secret", "secret", function.Spec.Registry.AuthSecretRef.Name, "namespace", function.Namespace)
-		return "", fmt.Errorf("failed to get registry auth secret: %w", err)
-	}
-
-	if authSecret.Type != v1.SecretTypeDockerConfigJson {
-		return "", fmt.Errorf("invalid registry auth secret type, must be of type %s", v1.SecretTypeDockerConfigJson)
-	}
-
-	if authSecret.Data[v1.DockerConfigJsonKey] == nil {
-		return "", fmt.Errorf("invalid registry auth secret data, must contain key %s", v1.DockerConfigJsonKey)
-	}
-
-	// persist secret temporarily
-	authFile, err := os.CreateTemp("", "auth-file-*.json")
-	if err != nil {
-		logger.Error(err, "Failed to create temp auth file")
-		return "", fmt.Errorf("failed to create temp auth file: %w", err)
-	}
-	defer authFile.Close()
-
-	_, err = authFile.Write(authSecret.Data[v1.DockerConfigJsonKey])
-	if err != nil {
-		logger.Error(err, "Failed to write temp auth file")
-		return "", fmt.Errorf("failed to write temp auth file: %w", err)
-	}
-
-	return authFile.Name(), nil
-}
-
-func (r *FunctionReconciler) deploy(ctx context.Context, function *v1alpha1.Function, repo *git.Repository) error {
-	logger := log.FromContext(ctx)
-
-	if err := r.setupPipelineRBAC(ctx, function); err != nil {
-		return fmt.Errorf("failed to setup pipeline RBAC: %w", err)
-	}
-
-	// deploy function
-	deployOptions := funccli.DeployOptions{}
-
-	if function.Spec.Registry.AuthSecretRef != nil && function.Spec.Registry.AuthSecretRef.Name != "" {
-		// we have a registry auth secret referenced -> use this for func deploy
-		authFile, err := r.persistRegistryAuthSecret(ctx, function)
-		if err != nil {
-			return fmt.Errorf("failed to persist registry auth secret temporarily: %w", err)
-		}
-
-		defer os.Remove(authFile)
-
-		deployOptions.RegistryAuthFile = authFile
-	}
-
-	logger.Info("Deploying function", "deployOptions", deployOptions)
-	err := r.FuncCliManager.Deploy(ctx, repo.Path(), function.Namespace, deployOptions)
-	if err != nil {
-		return fmt.Errorf("failed to deploy function: %w", err)
-	}
-
-	logger.Info("function deployed successfully")
-
-	return nil
 }
 
 func (r *FunctionReconciler) isDeployed(ctx context.Context, name, namespace string) (bool, error) {
@@ -624,20 +466,6 @@ func (r *FunctionReconciler) findFunctionsForConfigMap(ctx context.Context, _ cl
 
 	logger.Info("Enqueueing Functions for reconciliation due to ConfigMap change", "count", len(requests))
 	return requests
-}
-
-func (r *FunctionReconciler) isMiddlewareLatest(ctx context.Context, metadata *funcfn.Function, namespace string) (bool, error) {
-	latestMiddleware, err := r.FuncCliManager.GetLatestMiddlewareVersion(ctx, metadata.Runtime, metadata.Invoke)
-	if err != nil {
-		return false, fmt.Errorf("failed to get latest available middleware version: %w", err)
-	}
-
-	functionMiddleware, err := r.FuncCliManager.GetMiddlewareVersion(ctx, metadata.Name, namespace)
-	if err != nil {
-		return false, fmt.Errorf("failed to get middleware version of function: %w", err)
-	}
-
-	return latestMiddleware == functionMiddleware, nil
 }
 
 // isMiddlewareUpdateEnabled returns if the middleware should be updated given by the functions spec or the operators

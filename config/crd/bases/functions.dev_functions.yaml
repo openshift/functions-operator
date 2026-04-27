@@ -11,6 +11,8 @@ spec:
     kind: Function
     listKind: FunctionList
     plural: functions
+    shortNames:
+    - func
     singular: function
   scope: Namespaced
   versions:

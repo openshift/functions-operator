@@ -25,6 +25,8 @@ import (
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].status",description="Ready status"
 // +kubebuilder:printcolumn:name="Reason",type="string",JSONPath=".status.conditions[?(@.type==\"Ready\")].reason",description="Ready reason"
+// +kubebuilder:printcolumn:name="Middleware",type="string",JSONPath=".status.middleware.current",description="Current deployed Middleware Version"
+// +kubebuilder:printcolumn:name="Pending Rebuild",type="string",JSONPath=".status.middleware.pendingRebuild",description="Pending Rebuild"
 // +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
 
 // Function is the Schema for the functions API.

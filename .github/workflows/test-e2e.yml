@@ -23,8 +23,17 @@ jobs:
     steps:
       - name: Free up disk space
         run: |
-          # Remove large packages to free up disk space on GitHub runners
-          sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/ghc
+          # Remove large pre-installed toolchains not needed for K8s operator testing
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache \
+            /usr/local/share/powershell \
+            /usr/share/swift \
+            /usr/local/.ghcup \
+            /usr/local/share/chromium \
+            /usr/local/lib/heroku
           # Clean up Docker to start fresh
           docker system prune -af --volumes
           df -h
@@ -70,17 +79,17 @@ jobs:
 
           if [ "${{ matrix.builder }}" = "s2i" ]; then
             echo "Pre-pulling S2I builder images..."
-            docker pull registry.access.redhat.com/ubi8/go-toolset:latest
+            docker pull registry.access.redhat.com/ubi8/go-toolset:latest || true
             # for now we only download the go image, as we only use this in the e2e tests
-          
-            kind load docker-image registry.access.redhat.com/ubi8/go-toolset:latest
+
+            kind load docker-image registry.access.redhat.com/ubi8/go-toolset:latest || true
           elif [ "${{ matrix.builder }}" = "pack" ]; then
             echo "Pre-pulling pack builder images..."
-            docker pull ghcr.io/knative/builder-jammy-base:v2
-            docker pull ghcr.io/knative/builder-jammy-tiny:v2
+            docker pull ghcr.io/knative/builder-jammy-base:v2 || true
+            docker pull ghcr.io/knative/builder-jammy-tiny:v2 || true
 
-            kind load docker-image ghcr.io/knative/builder-jammy-base:v2
-            kind load docker-image ghcr.io/knative/builder-jammy-tiny:v2
+            kind load docker-image ghcr.io/knative/builder-jammy-base:v2 || true
+            kind load docker-image ghcr.io/knative/builder-jammy-tiny:v2 || true
           fi
 
           echo "Builder images cached in KinD cluster"

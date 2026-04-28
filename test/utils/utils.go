@@ -36,7 +36,7 @@ func Run(cmd *exec.Cmd) (string, error) {
 		_, _ = fmt.Fprintf(GinkgoWriter, "chdir dir: %q\n", err)
 	}
 
-	cmd.Env = append(os.Environ(), "GO111MODULE=on")
+	cmd.Env = append(append(os.Environ(), cmd.Env...), "GO111MODULE=on")
 	command := strings.Join(cmd.Args, " ")
 	_, _ = fmt.Fprintf(GinkgoWriter, "running: %q\n", command)
 	output, err := cmd.CombinedOutput()

@@ -30,6 +30,27 @@ function header_text {
 	echo "$header$*$reset"
 }
 
+function kubectl_apply_with_retry() {
+  local max_attempts=5
+  local delay=5
+  local attempt
+
+  for attempt in $(seq 1 $max_attempts); do
+    if kubectl apply "$@"; then
+      return 0
+    fi
+
+    if [ "$attempt" -lt "$max_attempts" ]; then
+      header_text "kubectl apply failed (attempt $attempt/$max_attempts), retrying in ${delay}s..."
+      sleep "$delay"
+      delay=$((delay * 2))
+    fi
+  done
+
+  header_text "kubectl apply failed after $max_attempts attempts"
+  return 1
+}
+
 function delete_existing_cluster() {
   header_text "Deleting existing Kind cluster..."
   kind delete cluster --name "$CLUSTER_NAME" || true
@@ -84,8 +105,6 @@ nodes:
   image: kindest/node:$NODE_VERSION
 - role: worker
   image: kindest/node:$NODE_VERSION
-- role: worker
-  image: kindest/node:$NODE_VERSION
 containerdConfigPatches:
 - |-
   [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:$REGISTRY_PORT"]
@@ -122,7 +141,7 @@ EOF
 
 function install_tekton() {
   header_text "Install Tekton"
-  kubectl apply -f https://infra.tekton.dev/tekton-releases/pipeline/previous/${TEKTON_VERSION}/release.yaml
+  kubectl_apply_with_retry -f https://infra.tekton.dev/tekton-releases/pipeline/previous/${TEKTON_VERSION}/release.yaml
   kubectl patch configmap feature-flags -n tekton-pipelines --type merge -p '{"data":{"coschedule":"disabled"}}'
 
   header_text "Waiting for Tekton to be ready..."
@@ -132,9 +151,9 @@ function install_tekton() {
 
 function install_knative_serving() {
   header_text "Installing Knative Serving..."
-  kubectl apply -f https://github.com/knative/serving/releases/download/knative-${SERVING_VERSION}/serving-crds.yaml
-  kubectl apply -f https://github.com/knative/serving/releases/download/knative-${SERVING_VERSION}/serving-core.yaml
-  kubectl apply -f https://github.com/knative/net-kourier/releases/download/knative-${SERVING_VERSION}/kourier.yaml
+  kubectl_apply_with_retry -f https://github.com/knative/serving/releases/download/knative-${SERVING_VERSION}/serving-crds.yaml
+  kubectl_apply_with_retry -f https://github.com/knative/serving/releases/download/knative-${SERVING_VERSION}/serving-core.yaml
+  kubectl_apply_with_retry -f https://github.com/knative/net-kourier/releases/download/knative-${SERVING_VERSION}/kourier.yaml
 
   kubectl patch configmap/config-network \
     --namespace knative-serving \
@@ -148,14 +167,14 @@ function install_knative_serving() {
 
 function install_keda() {
   header_text "Installing keda"
-  kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/${KEDA_VERSION}/keda-${KEDA_VERSION:1}.yaml
-  kubectl apply --server-side -f https://github.com/kedacore/keda/releases/download/${KEDA_VERSION}/keda-${KEDA_VERSION:1}-core.yaml
+  kubectl_apply_with_retry --server-side -f https://github.com/kedacore/keda/releases/download/${KEDA_VERSION}/keda-${KEDA_VERSION:1}.yaml
+  kubectl_apply_with_retry --server-side -f https://github.com/kedacore/keda/releases/download/${KEDA_VERSION}/keda-${KEDA_VERSION:1}-core.yaml
   header_text "Waiting for Keda to become ready"
   kubectl wait deployment --all --timeout=-1s --for=condition=Available --namespace keda
 
   header_text "Installing keda HTTP add-on"
-  kubectl apply --server-side -f https://github.com/kedacore/http-add-on/releases/download/${KEDA_HTTP_ADDON_VERSION}/keda-add-ons-http-${KEDA_HTTP_ADDON_VERSION:1}-crds.yaml
-  kubectl apply --server-side -f https://github.com/kedacore/http-add-on/releases/download/${KEDA_HTTP_ADDON_VERSION}/keda-add-ons-http-${KEDA_HTTP_ADDON_VERSION:1}.yaml
+  kubectl_apply_with_retry --server-side -f https://github.com/kedacore/http-add-on/releases/download/${KEDA_HTTP_ADDON_VERSION}/keda-add-ons-http-${KEDA_HTTP_ADDON_VERSION:1}-crds.yaml
+  kubectl_apply_with_retry --server-side -f https://github.com/kedacore/http-add-on/releases/download/${KEDA_HTTP_ADDON_VERSION}/keda-add-ons-http-${KEDA_HTTP_ADDON_VERSION:1}.yaml
   header_text "Waiting for Keda HTTP add-on to become ready"
   kubectl wait deployment --all --timeout=-1s --for=condition=Available --namespace keda
 }

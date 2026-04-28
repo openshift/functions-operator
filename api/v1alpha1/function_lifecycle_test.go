@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -28,7 +29,7 @@ func TestRecordHistoryEvent(t *testing.T) {
 		{
 			name: "prepends event to existing history",
 			existingHistory: []FunctionStatusHistoryEntry{
-				{Time: metav1.Now(), Message: "Older event"},
+				{Time: metav1.NewTime(time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)), Message: "Older event"},
 			},
 			newMessage:    "Newer event",
 			expectedLen:   2,
@@ -38,10 +39,11 @@ func TestRecordHistoryEvent(t *testing.T) {
 		{
 			name: "trims oldest entries when exceeding max",
 			existingHistory: func() []FunctionStatusHistoryEntry {
+				base := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 				entries := make([]FunctionStatusHistoryEntry, MaxHistoryEntries)
 				for i := range entries {
 					entries[i] = FunctionStatusHistoryEntry{
-						Time:    metav1.Now(),
+						Time:    metav1.NewTime(base.Add(time.Duration(i) * time.Minute)),
 						Message: fmt.Sprintf("Event %d", i),
 					}
 				}
@@ -50,7 +52,7 @@ func TestRecordHistoryEvent(t *testing.T) {
 			newMessage:    "Overflow event",
 			expectedLen:   MaxHistoryEntries,
 			expectedFirst: "Overflow event",
-			expectedLast:  fmt.Sprintf("Event %d", MaxHistoryEntries-2),
+			expectedLast:  fmt.Sprintf("Event %d", 1),
 		},
 	}
 
@@ -76,9 +78,10 @@ func TestRecordHistoryEvent(t *testing.T) {
 
 func TestRecordHistoryEventFIFOOrder(t *testing.T) {
 	f := &Function{}
+	base := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
 
 	for i := 0; i < MaxHistoryEntries+5; i++ {
-		f.RecordHistoryEvent(fmt.Sprintf("Event %d", i))
+		f.RecordHistoryEvent(fmt.Sprintf("Event %d", i), WithHistoryEventTime(base.Add(time.Duration(i)*time.Minute)))
 	}
 
 	if len(f.Status.History) != MaxHistoryEntries {
@@ -90,6 +93,28 @@ func TestRecordHistoryEventFIFOOrder(t *testing.T) {
 		if entry.Message != expected {
 			t.Errorf("entry %d: expected message %q, got %q", i, expected, entry.Message)
 		}
+	}
+}
+
+func TestRecordHistoryEventSortsByTime(t *testing.T) {
+	f := &Function{}
+	now := time.Date(2025, 6, 15, 12, 0, 0, 0, time.UTC)
+
+	f.RecordHistoryEvent("Second event", WithHistoryEventTime(now))
+	f.RecordHistoryEvent("First event (older)", WithHistoryEventTime(now.Add(-1*time.Hour)))
+	f.RecordHistoryEvent("Third event", WithHistoryEventTime(now.Add(1*time.Hour)))
+
+	if len(f.Status.History) != 3 {
+		t.Fatalf("expected 3 entries, got %d", len(f.Status.History))
+	}
+	if f.Status.History[0].Message != "Third event" {
+		t.Errorf("expected first entry to be newest, got %q", f.Status.History[0].Message)
+	}
+	if f.Status.History[1].Message != "Second event" {
+		t.Errorf("expected second entry to be middle, got %q", f.Status.History[1].Message)
+	}
+	if f.Status.History[2].Message != "First event (older)" {
+		t.Errorf("expected last entry to be oldest, got %q", f.Status.History[2].Message)
 	}
 }
 

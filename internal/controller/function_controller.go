@@ -154,6 +154,7 @@ func applyLastDeployedAnnotation(ctx context.Context, function *v1alpha1.Functio
 			log.FromContext(ctx).Info("could not parse "+funcAnnotationLastDeployed+" annotation", "error", err)
 		} else {
 			function.Status.Deployment.ImageBuilt = metav1.NewTime(t)
+			function.RecordHistoryEvent("Function was deployed/redeployed", v1alpha1.WithHistoryEventTime(t))
 		}
 	}
 }

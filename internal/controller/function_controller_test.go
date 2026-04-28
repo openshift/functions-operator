@@ -476,6 +476,16 @@ var _ = Describe("Function Controller", func() {
 					expectedTime, err := time.Parse(time.RFC3339, "2026-01-02T15:04:05+06:00")
 					Expect(err).NotTo(HaveOccurred())
 					Expect(status.Deployment.ImageBuilt.UTC()).To(Equal(expectedTime.UTC()))
+
+					// check if it is in the history too
+					Expect(status.History).To(ContainElement(
+						SatisfyAll(
+							HaveField("Message", "Function was deployed/redeployed"),
+							WithTransform(func(e functionsdevv1alpha1.FunctionStatusHistoryEntry) time.Time {
+								return e.Time.UTC()
+							}, Equal(expectedTime.UTC())),
+						),
+					))
 				},
 			}),
 			Entry("should set ServiceReady condition to false with unknown reason when ready status is empty", reconcileTestCase{

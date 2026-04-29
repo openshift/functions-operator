@@ -2,6 +2,8 @@ package funccli
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -330,51 +332,116 @@ func (m *managerImpl) getLatestRelease(ctx context.Context) (*GitHubRelease, err
 	return &release, nil
 }
 
-// downloadAndInstall downloads the appropriate binary and installs it
+// downloadAndInstall downloads the appropriate binary, verifies its SHA256 checksum, and installs it
 func (m *managerImpl) downloadAndInstall(ctx context.Context, release *GitHubRelease) error {
-	// Determine the appropriate asset name based on OS and architecture
 	assetName := m.getAssetName()
 
-	var downloadURL string
+	var downloadURL, checksumURL string
 	for _, asset := range release.Assets {
-		if asset.Name == assetName {
+		switch asset.Name {
+		case assetName:
 			downloadURL = asset.BrowserDownloadURL
-			break
+		case "checksums.txt":
+			checksumURL = asset.BrowserDownloadURL
 		}
 	}
 
 	if downloadURL == "" {
 		return fmt.Errorf("no suitable asset found for %s/%s", goruntime.GOOS, goruntime.GOARCH)
 	}
+	if checksumURL == "" {
+		return fmt.Errorf("no checksums.txt found in release %s", release.Name)
+	}
 
 	m.logger.Info("Downloading func CLI", "url", downloadURL, "asset", assetName)
 
-	// Download to temporary file first
 	tmpFile := filepath.Join(m.installPath, fmt.Sprintf(".%s.tmp", binaryName))
 	if err := m.downloadFile(ctx, downloadURL, tmpFile); err != nil {
 		return err
 	}
 
-	// Make it executable
-	if err := os.Chmod(tmpFile, 0755); err != nil {
-		if err := os.Remove(tmpFile); err != nil {
-			m.logger.Error(err, "Failed to remove tmp file while file could not be marked as executable", "file", tmpFile)
+	if err := m.verifyChecksum(ctx, tmpFile, assetName, checksumURL); err != nil {
+		if removeErr := os.Remove(tmpFile); removeErr != nil {
+			m.logger.Error(removeErr, "Failed to remove tmp file after checksum verification failure", "file", tmpFile)
 		}
+		return fmt.Errorf("checksum verification failed: %w", err)
+	}
 
+	if err := os.Chmod(tmpFile, 0755); err != nil {
+		if removeErr := os.Remove(tmpFile); removeErr != nil {
+			m.logger.Error(removeErr, "Failed to remove tmp file while file could not be marked as executable", "file", tmpFile)
+		}
 		return fmt.Errorf("failed to make binary executable: %w", err)
 	}
 
-	// Atomic rename to final location
 	finalPath := filepath.Join(m.installPath, binaryName)
 	if err := os.Rename(tmpFile, finalPath); err != nil {
-		if err := os.Remove(tmpFile); err != nil {
-			m.logger.Error(err, "Failed to remove tmp file while file could not be renamed", "file", tmpFile)
+		if removeErr := os.Remove(tmpFile); removeErr != nil {
+			m.logger.Error(removeErr, "Failed to remove tmp file while file could not be renamed", "file", tmpFile)
 		}
-
 		return fmt.Errorf("failed to install binary: %w", err)
 	}
 
 	return nil
+}
+
+// verifyChecksum downloads the checksums.txt file and verifies the downloaded binary matches
+func (m *managerImpl) verifyChecksum(ctx context.Context, filePath, assetName, checksumURL string) error {
+	expectedHash, err := m.fetchExpectedChecksum(ctx, assetName, checksumURL)
+	if err != nil {
+		return err
+	}
+
+	f, err := os.Open(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to open file for checksum: %w", err)
+	}
+	defer f.Close()
+
+	h := sha256.New()
+	if _, err := io.Copy(h, f); err != nil {
+		return fmt.Errorf("failed to compute checksum: %w", err)
+	}
+
+	actualHash := hex.EncodeToString(h.Sum(nil))
+	if actualHash != expectedHash {
+		return fmt.Errorf("sha256 mismatch: expected %s, got %s", expectedHash, actualHash)
+	}
+
+	m.logger.Info("Checksum verified", "asset", assetName, "sha256", actualHash)
+	return nil
+}
+
+// fetchExpectedChecksum downloads checksums.txt and extracts the hash for the given asset
+func (m *managerImpl) fetchExpectedChecksum(ctx context.Context, assetName, checksumURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", checksumURL, nil)
+	if err != nil {
+		return "", err
+	}
+
+	resp, err := m.httpClient.Do(req)
+	if err != nil {
+		return "", fmt.Errorf("failed to download checksums: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("checksums download failed with status %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("failed to read checksums: %w", err)
+	}
+
+	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+		parts := strings.Fields(line)
+		if len(parts) == 2 && parts[1] == assetName {
+			return parts[0], nil
+		}
+	}
+
+	return "", fmt.Errorf("no checksum found for asset %s", assetName)
 }
 
 // downloadFile downloads a file from the given URL

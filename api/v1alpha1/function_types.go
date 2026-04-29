@@ -77,12 +77,14 @@ type FunctionSpecRegistry struct {
 type FunctionStatus struct {
 	Name string `json:"name"`
 
-	Conditions []metav1.Condition `json:"conditions,omitempty"`
+	Git        FunctionStatusGit        `json:"git,omitempty"`
+	Deployment FunctionStatusDeployment `json:"deployment,omitempty"`
+	Middleware FunctionStatusMiddleware `json:"middleware,omitempty"`
+	Service    FunctionServiceStatus    `json:"service,omitempty"`
 
-	Git        FunctionStatusGit            `json:"git,omitempty"`
-	Deployment FunctionStatusDeployment     `json:"deployment,omitempty"`
-	Middleware FunctionStatusMiddleware     `json:"middleware,omitempty"`
-	History    []FunctionStatusHistoryEntry `json:"history,omitempty"`
+	History []FunctionStatusHistoryEntry `json:"history,omitempty"`
+
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 
 type FunctionStatusHistoryEntry struct {
@@ -110,6 +112,11 @@ type FunctionStatusMiddleware struct {
 	AutoUpdate     FunctionStatusMiddlewareAutoUpdate `json:"autoUpdate"`
 	PendingRebuild bool                               `json:"pendingRebuild"` // no omitempty to have it always shown
 	LastRebuild    metav1.Time                        `json:"lastRebuild,omitempty"`
+}
+
+type FunctionServiceStatus struct {
+	URL   string `json:"url,omitempty"`
+	Ready string `json:"ready,omitempty"` // string, as it can be UNKNOWN too
 }
 
 type FunctionStatusMiddlewareAutoUpdate struct {

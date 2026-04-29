@@ -238,6 +238,13 @@ spec:
                 type: object
               name:
                 type: string
+              service:
+                properties:
+                  ready:
+                    type: string
+                  url:
+                    type: string
+                type: object
             required:
             - name
             type: object

@@ -256,6 +256,7 @@ type middlewareUpToDate struct {
 	currentRevision string
 	serviceReady    string
 	currentVersion  string
+	serviceUrl      string
 	autoUpdate      autoUpdateStatus
 }
 
@@ -267,6 +268,7 @@ type middlewareOutdated struct {
 	serviceReady     string
 	currentVersion   string
 	availableVersion string
+	serviceUrl       string
 	autoUpdate       autoUpdateStatus
 }
 
@@ -298,6 +300,7 @@ func (r *FunctionReconciler) checkMiddlewareState(ctx context.Context, function 
 			currentImage:    desc.Image,
 			currentRevision: desc.Revision,
 			serviceReady:    desc.Ready,
+			serviceUrl:      desc.Route,
 			currentVersion:  desc.Middleware.Version,
 			autoUpdate:      autoUpdate,
 		}, nil
@@ -307,6 +310,7 @@ func (r *FunctionReconciler) checkMiddlewareState(ctx context.Context, function 
 		currentImage:     desc.Image,
 		currentRevision:  desc.Revision,
 		serviceReady:     desc.Ready,
+		serviceUrl:       desc.Route,
 		currentVersion:   desc.Middleware.Version,
 		availableVersion: latestVersion,
 		autoUpdate:       autoUpdate,
@@ -340,6 +344,8 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 		function.Status.Middleware.AutoUpdate.Enabled = check.autoUpdate.enabled
 		function.Status.Middleware.AutoUpdate.Source = check.autoUpdate.source
 		function.Status.Middleware.PendingRebuild = false
+		function.Status.Service.URL = check.serviceUrl
+		function.Status.Service.Ready = check.serviceReady
 		markServiceStatus(check.serviceReady, function)
 		function.MarkMiddlewareUpToDate()
 
@@ -351,6 +357,8 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 		function.Status.Middleware.AutoUpdate.Source = check.autoUpdate.source
 		function.Status.Middleware.Available = ptr.To(check.availableVersion)
 		function.Status.Middleware.PendingRebuild = false
+		function.Status.Service.URL = check.serviceUrl
+		function.Status.Service.Ready = check.serviceReady
 		markServiceStatus(check.serviceReady, function)
 
 		if !check.autoUpdate.enabled {
@@ -380,6 +388,8 @@ func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, functio
 			function.Status.Middleware.LastRebuild = metav1.Now()
 			function.Status.Deployment.ImageBuilt = metav1.Now()
 			function.Status.Middleware.Available = nil
+			function.Status.Service.URL = desc.Route
+			function.Status.Service.Ready = desc.Ready
 			markServiceStatus(desc.Ready, function)
 
 			function.RecordHistoryEvent(fmt.Sprintf("Middleware updated from %q to %q", check.currentVersion, check.availableVersion))

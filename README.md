@@ -147,6 +147,7 @@ The status will include:
 - Git information (branch, commit, last checked time)
 - Deployment details (image, runtime, build time, deployer)
 - Middleware status (current and available versions, auto-update settings, pending rebuild status)
+- Service status (URL and readiness)
 
 ## Advanced Use Cases
 
@@ -325,6 +326,8 @@ make lint
 | `middleware.autoUpdate.source` | string | Source of the autoUpdate setting ("function" or "operator") |
 | `middleware.pendingRebuild` | boolean | Whether a rebuild is pending due to outdated middleware |
 | `middleware.lastRebuild` | timestamp | Last time the function was rebuilt for middleware updates |
+| `service.url` | string | URL of the function's service |
+| `service.ready` | string | Whether the function's service is ready (e.g., "true", "false", "UNKNOWN") |
 
 #### Status Conditions
 

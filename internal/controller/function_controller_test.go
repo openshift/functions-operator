@@ -321,7 +321,25 @@ var _ = Describe("Function Controller", func() {
 					Expect(status.Middleware.Available).Should(BeNil())
 				},
 			}),
+			Entry("should populate Service information in the status", reconcileTestCase{
+				spec: defaultSpec,
+				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
+					funcMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+						Middleware: functions.Middleware{
+							Version: "v1.0.0",
+						},
+						Ready: "true",
+						Route: "http://example.com",
+					}, nil)
+					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
 
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+				},
+				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
+					Expect(status.Service.Ready).To(Equal("true"))
+					Expect(status.Service.URL).To(Equal("http://example.com"))
+				},
+			}),
 			Entry("should set ServiceReady condition to true when service is ready", reconcileTestCase{
 				spec: defaultSpec,
 				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {

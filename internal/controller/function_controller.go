@@ -444,7 +444,7 @@ func (r *FunctionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		).
 		Named("function").
 		WithOptions(controller.Options{
-			MaxConcurrentReconciles: 100, // TODO: find a good value
+			MaxConcurrentReconciles: 10, // TODO: find a good value
 		}).
 		Complete(r)
 }

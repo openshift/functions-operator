@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -219,16 +220,15 @@ func (r *FunctionReconciler) reconcileDeployment(ctx context.Context, function *
 	logger := log.FromContext(ctx)
 	logger.Info("Reconciling Function")
 
-	deployed, err := r.isDeployed(ctx, metadata.Name, function.Namespace)
-	if err != nil {
-		function.MarkDeployNotReady("DeployFailed", "Failed to check deployment status: %s", err.Error())
-		return fmt.Errorf("failed to check if function is already deployed: %w", err)
-	}
-
-	if !deployed {
+	initialDesc, err := r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
+	if errors.Is(err, funccli.ErrFunctionNotFound) {
 		logger.Info("Function is not deployed")
 		function.MarkDeployNotReady("NotDeployed", "Function not deployed yet")
 		return nil
+	}
+	if err != nil {
+		function.MarkDeployNotReady("DeployFailed", "Failed to check deployment status: %s", err.Error())
+		return fmt.Errorf("failed to check if function is already deployed: %w", err)
 	}
 
 	// function is deployed -> update status with metadata information
@@ -242,7 +242,7 @@ func (r *FunctionReconciler) reconcileDeployment(ctx context.Context, function *
 	applyLastDeployedAnnotation(ctx, function)
 
 	// Function is deployed - check middleware version
-	return r.handleMiddlewareUpdate(ctx, function, repo, metadata)
+	return r.handleMiddlewareUpdate(ctx, function, repo, metadata, &initialDesc)
 }
 
 // middlewareCheck is a sealed interface representing the result of inspecting a function's
@@ -280,12 +280,7 @@ type autoUpdateStatus struct {
 	source  string // "function" or "operator"
 }
 
-func (r *FunctionReconciler) checkMiddlewareState(ctx context.Context, function *v1alpha1.Function, metadata *funcfn.Function) (middlewareCheck, error) {
-	desc, err := r.FuncCliManager.Describe(ctx, metadata.Name, function.Namespace)
-	if err != nil {
-		return nil, fmt.Errorf("failed to describe function: %w", err)
-	}
-
+func (r *FunctionReconciler) checkMiddlewareState(ctx context.Context, function *v1alpha1.Function, metadata *funcfn.Function, desc *funcfn.Instance) (middlewareCheck, error) {
 	autoUpdate, err := r.getAutoUpdateStatus(ctx, function)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check middleware update setting: %w", err)
@@ -327,10 +322,10 @@ func (r *FunctionReconciler) getAutoUpdateStatus(ctx context.Context, function *
 }
 
 // handleMiddlewareUpdate checks if the function is using the latest middleware and redeploys if needed
-func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, function *v1alpha1.Function, repo *git.Repository, metadata *funcfn.Function) error {
+func (r *FunctionReconciler) handleMiddlewareUpdate(ctx context.Context, function *v1alpha1.Function, repo *git.Repository, metadata *funcfn.Function, desc *funcfn.Instance) error {
 	logger := log.FromContext(ctx)
 
-	check, err := r.checkMiddlewareState(ctx, function, metadata)
+	check, err := r.checkMiddlewareState(ctx, function, metadata, desc)
 	if err != nil {
 		function.MarkMiddlewareNotUpToDate("MiddlewareCheckFailed", "Failed to check middleware: %s", err)
 		return err
@@ -411,19 +406,6 @@ func markServiceStatus(ready string, function *v1alpha1.Function) {
 	default:
 		function.MarkServiceNotReady("ServiceReadyUnknown", "Underlying service readiness is unknown")
 	}
-}
-
-func (r *FunctionReconciler) isDeployed(ctx context.Context, name, namespace string) (bool, error) {
-	_, err := r.FuncCliManager.Describe(ctx, name, namespace)
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "no describe function") {
-			return false, nil
-		}
-
-		return false, fmt.Errorf("failed to describe function: %w", err)
-	}
-
-	return true, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.

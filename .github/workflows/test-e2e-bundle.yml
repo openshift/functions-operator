@@ -16,6 +16,23 @@ jobs:
     name: Bundle E2E Tests
     runs-on: ubuntu-latest
     steps:
+      - name: Free up disk space
+        run: |
+          # Remove large pre-installed toolchains not needed for K8s operator testing
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache \
+            /usr/local/share/powershell \
+            /usr/share/swift \
+            /usr/local/.ghcup \
+            /usr/local/share/chromium \
+            /usr/local/lib/heroku
+          # Clean up Docker to start fresh
+          docker system prune -af --volumes
+          df -h
+
       - name: Clone the code
         uses: actions/checkout@v6
 
@@ -50,3 +67,36 @@ jobs:
           REGISTRY_INSECURE: true
           REGISTRY: kind-registry:5000
         run: make test-e2e-bundle
+
+      - name: Collect Kubernetes artifacts
+        if: failure()
+        run: |
+          mkdir -p /tmp/k8s-artifacts
+          kubectl logs -n func-operator-system -l control-plane=controller-manager --tail=-1 --all-containers --prefix --timestamps > /tmp/k8s-artifacts/func-operator.log || true
+          for resource in functions deployments configmaps pipelineruns roles rolebindings; do
+            kubectl get ${resource} -A -o yaml > /tmp/k8s-artifacts/${resource}.yaml || true
+          done
+
+          # Install Tekton CLI for better PipelineRun log collection
+          curl -LO https://github.com/tektoncd/cli/releases/download/v0.44.1/tkn_0.44.1_Linux_x86_64.tar.gz
+          tar xvzf tkn_0.44.1_Linux_x86_64.tar.gz -C /tmp
+          chmod +x /tmp/tkn
+
+          # Collect logs from all pipelineruns using Tekton CLI
+          /tmp/tkn pipelinerun list -A > /tmp/k8s-artifacts/pipelinerun-list.txt 2>&1 || true
+          kubectl get pipelineruns -A -o json | jq -r '.items[] | "\(.metadata.namespace) \(.metadata.name)"' | while read ns name; do
+            /tmp/tkn pipelinerun logs $name -n $ns > /tmp/k8s-artifacts/pipelinerun-logs-${ns}-${name}.log 2>&1 || true
+          done
+
+          # Collect operator logs from all test namespaces (bundle tests install into dynamic namespaces)
+          for ns in $(kubectl get namespaces -o jsonpath='{.items[*].metadata.name}' | tr ' ' '\n' | grep '^test-'); do
+            kubectl logs -n "$ns" -l control-plane=controller-manager --tail=-1 --all-containers --prefix --timestamps > "/tmp/k8s-artifacts/operator-${ns}.log" 2>/dev/null || true
+          done
+
+      - name: Upload Kubernetes artifacts
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bundle-e2e-logs
+          path: /tmp/k8s-artifacts/
+          retention-days: 7

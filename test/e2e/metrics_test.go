@@ -157,7 +157,7 @@ var _ = Describe("Manager", func() {
 							"name": "curl",
 							"image": "curlimages/curl:latest",
 							"command": ["/bin/sh", "-c"],
-							"args": ["curl -v %s.%s.svc.cluster.local:%s/metrics"],
+							"args": ["curl -v --retry 10 --retry-delay 5 --retry-connrefused %s.%s.svc.cluster.local:%s/metrics"],
 							"securityContext": {
 								"allowPrivilegeEscalation": false,
 								"capabilities": {

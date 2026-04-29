@@ -64,7 +64,6 @@ type FunctionSpecRepository struct {
 
 	// +kubebuilder:validation:Optional
 	// Path points to the function inside the repository. Defaults to "."
-	// TODO: implement logic
 	Path string `json:"path,omitempty"`
 }
 

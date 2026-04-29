@@ -348,12 +348,18 @@ func main() {
 	}
 	setupLog.Info("Func CLI is ready")
 
+	gitManager, err := git.NewManager()
+	if err != nil {
+		setupLog.Error(err, "failed to initialize git manager")
+		os.Exit(1)
+	}
+
 	if err := (&controller.FunctionReconciler{
 		Client:            mgr.GetClient(),
 		Scheme:            mgr.GetScheme(),
 		Recorder:          mgr.GetEventRecorder("functions-controller"),
 		FuncCliManager:    funcCLIManager,
-		GitManager:        git.NewManager(),
+		GitManager:        gitManager,
 		OperatorNamespace: operatorNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Function")

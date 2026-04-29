@@ -23,8 +23,11 @@ type Manager interface {
 	CloneRepository(ctx context.Context, url, subPath, reference string, auth map[string][]byte) (*Repository, error)
 }
 
-func NewManager() Manager {
-	return &managerImpl{}
+func NewManager() (Manager, error) {
+	if err := os.MkdirAll(cloneBaseDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create git clone base directory: %w", err)
+	}
+	return &managerImpl{}, nil
 }
 
 type managerImpl struct{}

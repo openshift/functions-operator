@@ -108,26 +108,6 @@ func (f *Function) MarkNotReady(reason, messageFormat string, messageA ...interf
 	})
 }
 
-func (f *Function) MarkTerminating() bool {
-	return meta.SetStatusCondition(&f.Status.Conditions, metav1.Condition{
-		Type:               TypeReady,
-		Status:             metav1.ConditionFalse,
-		Reason:             "FinalizerOperations",
-		Message:            "Performing cleanup operations before deletion",
-		ObservedGeneration: f.Generation,
-	})
-}
-
-func (f *Function) MarkFinalizeFailed(err error) bool {
-	return meta.SetStatusCondition(&f.Status.Conditions, metav1.Condition{
-		Type:               TypeReady,
-		Status:             metav1.ConditionFalse,
-		Reason:             "FinalizeFailed",
-		Message:            fmt.Sprintf("Failed to finalize: %s", err.Error()),
-		ObservedGeneration: f.Generation,
-	})
-}
-
 // Source condition helpers
 
 func (f *Function) MarkSourceReady() bool {

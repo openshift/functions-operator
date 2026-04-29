@@ -26,7 +26,7 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/utils/ptr"
+	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
@@ -109,37 +109,34 @@ func (r *FunctionReconciler) ensureDeployFunctionRole(ctx context.Context, names
 func (r *FunctionReconciler) ensureDeployFunctionRoleBinding(ctx context.Context, function *v1alpha1.Function) error {
 	logger := log.FromContext(ctx)
 
-	expectedRoleBinding := &rbacv1.RoleBinding{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "deploy-function-default",
-			Namespace: function.Namespace,
-			OwnerReferences: []metav1.OwnerReference{
-				{
-					APIVersion: v1alpha1.GroupVersion.String(),
-					Kind:       "Function",
-					Name:       function.Name,
-					UID:        function.UID,
-					Controller: ptr.To(true),
-				},
-			},
-		},
-		Subjects: []rbacv1.Subject{{
-			Kind:      "ServiceAccount",
-			Name:      "default",
-			Namespace: function.Namespace,
-		}},
-		RoleRef: rbacv1.RoleRef{
-			APIGroup: "rbac.authorization.k8s.io",
-			Kind:     "Role",
-			Name:     deployFunctionRoleName,
-		},
+	expectedSubjects := []rbacv1.Subject{{
+		Kind:      "ServiceAccount",
+		Name:      "default",
+		Namespace: function.Namespace,
+	}}
+
+	expectedRoleRef := rbacv1.RoleRef{
+		APIGroup: "rbac.authorization.k8s.io",
+		Kind:     "Role",
+		Name:     deployFunctionRoleName,
 	}
 
 	foundRoleBinding := &rbacv1.RoleBinding{}
-	err := r.Get(ctx, types.NamespacedName{Name: expectedRoleBinding.Name, Namespace: expectedRoleBinding.Namespace}, foundRoleBinding)
+	err := r.Get(ctx, types.NamespacedName{Name: deployFunctionRoleBindingName, Namespace: function.Namespace}, foundRoleBinding)
 	if err != nil {
 		if apierrors.IsNotFound(err) {
-			if err := r.Create(ctx, expectedRoleBinding); err != nil {
+			rb := &rbacv1.RoleBinding{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      deployFunctionRoleBindingName,
+					Namespace: function.Namespace,
+				},
+				Subjects: expectedSubjects,
+				RoleRef:  expectedRoleRef,
+			}
+			if err := controllerutil.SetOwnerReference(function, rb, r.Scheme); err != nil {
+				return fmt.Errorf("failed to set owner reference: %w", err)
+			}
+			if err := r.Create(ctx, rb); err != nil {
 				return fmt.Errorf("failed to create role binding: %w", err)
 			}
 			logger.Info("Created deploy-function role binding")
@@ -148,12 +145,30 @@ func (r *FunctionReconciler) ensureDeployFunctionRoleBinding(ctx context.Context
 		return fmt.Errorf("failed to get role binding: %w", err)
 	}
 
-	// Update if needed
-	if !equality.Semantic.DeepDerivative(expectedRoleBinding, foundRoleBinding) {
-		foundRoleBinding.Subjects = expectedRoleBinding.Subjects
-		foundRoleBinding.RoleRef = expectedRoleBinding.RoleRef
-		foundRoleBinding.OwnerReferences = expectedRoleBinding.OwnerReferences
+	needsUpdate := false
 
+	hasRef, err := controllerutil.HasOwnerReference(foundRoleBinding.OwnerReferences, function, r.Scheme)
+	if err != nil {
+		return fmt.Errorf("failed to check owner reference: %w", err)
+	}
+	if !hasRef {
+		if err := controllerutil.SetOwnerReference(function, foundRoleBinding, r.Scheme); err != nil {
+			return fmt.Errorf("failed to set owner reference: %w", err)
+		}
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepDerivative(expectedSubjects, foundRoleBinding.Subjects) {
+		foundRoleBinding.Subjects = expectedSubjects
+		needsUpdate = true
+	}
+
+	if !equality.Semantic.DeepDerivative(expectedRoleRef, foundRoleBinding.RoleRef) {
+		foundRoleBinding.RoleRef = expectedRoleRef
+		needsUpdate = true
+	}
+
+	if needsUpdate {
 		if err := r.Update(ctx, foundRoleBinding); err != nil {
 			return fmt.Errorf("failed to update role binding: %w", err)
 		}

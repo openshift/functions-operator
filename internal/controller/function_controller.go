@@ -48,8 +48,9 @@ import (
 )
 
 const (
-	deployFunctionRoleName = "func-operator-deploy-function"
-	controllerConfigName   = "func-operator-controller-config"
+	deployFunctionRoleName        = "func-operator-deploy-function"
+	deployFunctionRoleBindingName = "deploy-function-default"
+	controllerConfigName          = "func-operator-controller-config"
 
 	funcAnnotationPrefix       = "functions.knative.dev/"
 	funcAnnotationLastDeployed = funcAnnotationPrefix + "last-deployed"

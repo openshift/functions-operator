@@ -97,13 +97,6 @@ var _ = Describe("Middleware Update", func() {
 
 		AfterEach(func() {
 			logFailedTestDetails(functionName, functionNamespace)
-
-			// Cleanup function resource
-			if functionName != "" {
-				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
-				_, err := utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred())
-			}
 		})
 
 		It("should update the middleware and mark the function as ready", func() {
@@ -187,6 +180,10 @@ var _ = Describe("Middleware Update", func() {
 
 			err = k8sClient.Create(ctx, fn)
 			Expect(err).NotTo(HaveOccurred())
+
+			utils.DeferCleanupOnSuccess(func() {
+				_, _ = utils.RunCmd("kubectl", "delete", "function", fn.Name, "--namespace", fn.Namespace)
+			})
 
 			functionName = fn.Name
 
@@ -335,13 +332,6 @@ var _ = Describe("Middleware Update", func() {
 
 		AfterEach(func() {
 			logFailedTestDetails(functionName, functionNamespace)
-
-			// Cleanup function resource
-			if functionName != "" {
-				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
-				_, err := utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred())
-			}
 		})
 
 		It("should reconcile functions without explicit autoUpdateMiddleware when ConfigMap changes", func() {
@@ -379,6 +369,11 @@ var _ = Describe("Middleware Update", func() {
 
 			err = k8sClient.Create(ctx, fn)
 			Expect(err).NotTo(HaveOccurred())
+
+			utils.DeferCleanupOnSuccess(func() {
+				_, _ = utils.RunCmd("kubectl", "delete", "function", fn.Name, "--namespace", fn.Namespace)
+			})
+
 			functionName = fn.Name
 
 			By("Waiting for Function to become ready with middleware updates disabled")
@@ -492,6 +487,9 @@ var _ = Describe("Middleware Update", func() {
 
 			err = k8sClient.Create(ctx, fn)
 			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(func() {
+				_, _ = utils.RunCmd("kubectl", "delete", "function", fn.Name, "--namespace", fn.Namespace)
+			})
 			functionName = fn.Name
 
 			By("Waiting for Function to become ready")

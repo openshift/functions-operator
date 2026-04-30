@@ -367,6 +367,9 @@ func createNamespaceAndDeployFunction() TestNamespace {
 	out, err := utils.RunFuncDeploy(repoDir, utils.WithNamespace(ns))
 	Expect(err).NotTo(HaveOccurred())
 	_, _ = fmt.Fprint(GinkgoWriter, out)
+	DeferCleanup(func() {
+		_, _ = utils.RunFunc("delete", "--path", repoDir, "--namespace", ns)
+	})
 
 	// Push updated func.yaml back to repo
 	err = utils.CommitAndPush(repoDir, "Update func.yaml after deploy", "func.yaml")

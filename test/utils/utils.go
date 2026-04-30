@@ -47,6 +47,12 @@ func Run(cmd *exec.Cmd) (string, error) {
 	return string(output), nil
 }
 
+func RunCmd(cmd string, args ...string) (string, error) {
+	c := exec.Command(cmd, args...)
+
+	return Run(c)
+}
+
 // GetNonEmptyLines converts given command output string into individual objects
 // according to line breakers, and ignores the empty elements in it.
 func GetNonEmptyLines(output string) []string {

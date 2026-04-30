@@ -159,6 +159,10 @@ func createSSHFunctionAndExpectReady(
 	err = k8sClient.Create(ctx, function)
 	Expect(err).NotTo(HaveOccurred())
 
+	utils.DeferCleanupOnSuccess(func() {
+		_, _ = utils.RunCmd("kubectl", "delete", "function", function.Name, "--namespace", function.Namespace)
+	})
+
 	Eventually(functionBecomesReady(function.Name, functionNamespace)).Should(Succeed())
 	return function.Name
 }
@@ -216,13 +220,6 @@ var _ = Describe("Operator", func() {
 
 		AfterEach(func() {
 			logFailedTestDetails(functionName, functionNamespace)
-
-			// Cleanup function resource
-			if functionName != "" {
-				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
-				_, err := utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred())
-			}
 		})
 
 		It("should mark the function as ready", func() {
@@ -241,6 +238,10 @@ var _ = Describe("Operator", func() {
 
 			err := k8sClient.Create(ctx, function)
 			Expect(err).NotTo(HaveOccurred())
+
+			utils.DeferCleanupOnSuccess(func() {
+				_, _ = utils.RunCmd("kubectl", "delete", "function", function.Name, "--namespace", function.Namespace)
+			})
 
 			functionName = function.Name
 
@@ -296,13 +297,6 @@ var _ = Describe("Operator", func() {
 
 		AfterEach(func() {
 			logFailedTestDetails(functionName, functionNamespace)
-
-			// Cleanup function resource
-			if functionName != "" {
-				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
-				_, err := utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred())
-			}
 		})
 
 		It("should mark the function as ready", func() {
@@ -322,6 +316,10 @@ var _ = Describe("Operator", func() {
 
 			err := k8sClient.Create(ctx, function)
 			Expect(err).NotTo(HaveOccurred())
+
+			utils.DeferCleanupOnSuccess(func() {
+				_, _ = utils.RunCmd("kubectl", "delete", "function", function.Name, "--namespace", function.Namespace)
+			})
 
 			functionName = function.Name
 
@@ -356,12 +354,7 @@ var _ = Describe("Operator", func() {
 		})
 
 		AfterEach(func() {
-			// Cleanup function resource
-			if functionName != "" {
-				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
-				_, err := utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred())
-			}
+			logFailedTestDetails(functionName, functionNamespace)
 		})
 
 		It("should mark the function as not ready", func() {
@@ -380,6 +373,10 @@ var _ = Describe("Operator", func() {
 
 			err := k8sClient.Create(ctx, function)
 			Expect(err).NotTo(HaveOccurred())
+
+			utils.DeferCleanupOnSuccess(func() {
+				_, _ = utils.RunCmd("kubectl", "delete", "function", function.Name, "--namespace", function.Namespace)
+			})
 
 			functionName = function.Name
 
@@ -435,13 +432,6 @@ var _ = Describe("Operator", func() {
 
 		AfterEach(func() {
 			logFailedTestDetails(functionName, functionNamespace)
-
-			// Cleanup function resource
-			if functionName != "" {
-				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
-				_, err := utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred())
-			}
 		})
 
 		Context("using token authentication", func() {
@@ -481,6 +471,10 @@ var _ = Describe("Operator", func() {
 				err = k8sClient.Create(ctx, function)
 				Expect(err).NotTo(HaveOccurred())
 
+				utils.DeferCleanupOnSuccess(func() {
+					_, _ = utils.RunCmd("kubectl", "delete", "function", function.Name, "--namespace", function.Namespace)
+				})
+
 				functionName = function.Name
 
 				Eventually(functionBecomesReady(functionName, functionNamespace)).Should(Succeed())
@@ -503,6 +497,10 @@ var _ = Describe("Operator", func() {
 
 				err := k8sClient.Create(ctx, function)
 				Expect(err).NotTo(HaveOccurred())
+
+				utils.DeferCleanupOnSuccess(func() {
+					_, _ = utils.RunCmd("kubectl", "delete", "function", function.Name, "--namespace", function.Namespace)
+				})
 
 				functionName = function.Name
 
@@ -548,6 +546,10 @@ var _ = Describe("Operator", func() {
 				err = k8sClient.Create(ctx, function)
 				Expect(err).NotTo(HaveOccurred())
 
+				utils.DeferCleanupOnSuccess(func() {
+					_, _ = utils.RunCmd("kubectl", "delete", "function", function.Name, "--namespace", function.Namespace)
+				})
+
 				functionName = function.Name
 
 				Eventually(functionBecomesReady(functionName, functionNamespace)).Should(Succeed())
@@ -570,6 +572,10 @@ var _ = Describe("Operator", func() {
 
 				err := k8sClient.Create(ctx, function)
 				Expect(err).NotTo(HaveOccurred())
+
+				utils.DeferCleanupOnSuccess(func() {
+					_, _ = utils.RunCmd("kubectl", "delete", "function", function.Name, "--namespace", function.Namespace)
+				})
 
 				functionName = function.Name
 
@@ -636,12 +642,6 @@ var _ = Describe("Operator", func() {
 
 		AfterEach(func() {
 			logFailedTestDetails(functionName, functionNamespace)
-
-			if functionName != "" {
-				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
-				_, err := utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred())
-			}
 		})
 
 		It("should mark the function as ready with SSH key auth", func() {
@@ -714,12 +714,6 @@ var _ = Describe("Operator", func() {
 
 		AfterEach(func() {
 			logFailedTestDetails(functionName, functionNamespace)
-
-			if functionName != "" {
-				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
-				_, err := utils.Run(cmd)
-				Expect(err).NotTo(HaveOccurred())
-			}
 		})
 
 		It("should mark the function as ready when SSH key authSecretRef is provided", func() {
@@ -742,6 +736,10 @@ var _ = Describe("Operator", func() {
 
 			err := k8sClient.Create(ctx, function)
 			Expect(err).NotTo(HaveOccurred())
+
+			utils.DeferCleanupOnSuccess(func() {
+				_, _ = utils.RunCmd("kubectl", "delete", "function", function.Name, "--namespace", function.Namespace)
+			})
 
 			functionName = function.Name
 

@@ -49,6 +49,8 @@ BeforeEach(func() {
 - `CreateRepo(owner, name string, private bool) (url string, cleanup func(), err error)` - Create repository
 - `CreateRandomRepo(owner string, private bool) (name, url string, cleanup func(), err error)` - Create repo with random name
 - `CreateAccessToken(username, password, tokenName string) (string, error)` - Generate access token
+- `CreateSSHKey(username, password, title, publicKey string) error` - Register SSH public key for user
+- `SSHRepoURL(owner, repo string) (string, error)` - Get SSH URL for a repository
 
 **E2E Helper Functions:**
 - `InitializeRepoWithFunction(url, user, pass, lang)` - Clone, init function, push
@@ -90,12 +92,88 @@ DeferCleanup(cleanup)
 // Create access token
 token, err := repoProvider.CreateAccessToken(username, password, "test-token")
 
-// Use token in Function spec
+// Create auth secret with token
+secret := &v1.Secret{
+    ObjectMeta: metav1.ObjectMeta{
+        GenerateName: "git-auth-",
+        Namespace:    functionNamespace,
+    },
+    Data: map[string][]byte{
+        "token": []byte(token),
+    },
+}
+
+// Use in Function spec
 Spec: functionsdevv1alpha1.FunctionSpec{
-    Source: functionsdevv1alpha1.FunctionSpecSource{
-        RepositoryURL: repoURL,
-        Credentials: &functionsdevv1alpha1.Credentials{
-            Token: token,
+    Repository: functionsdevv1alpha1.FunctionSpecRepository{
+        URL: repoURL,
+        AuthSecretRef: &v1.LocalObjectReference{
+            Name: secret.Name,
+        },
+    },
+}
+```
+
+## Testing SSH Repositories
+
+```go
+BeforeEach(func() {
+    // Create user and HTTP repo as usual
+    username, password, _, cleanup, err := repoProvider.CreateRandomUser()
+    Expect(err).NotTo(HaveOccurred())
+    DeferCleanup(cleanup)
+
+    repoName, repoURL, cleanup, err := repoProvider.CreateRandomRepo(username, false)
+    Expect(err).NotTo(HaveOccurred())
+    DeferCleanup(cleanup)
+
+    // Generate SSH keypair and register with Gitea
+    keyDir, err := os.MkdirTemp("", "ssh-e2e-*")
+    Expect(err).NotTo(HaveOccurred())
+    DeferCleanup(os.RemoveAll, keyDir)
+
+    sshKeyPath := filepath.Join(keyDir, "id_ed25519")
+    cmd := exec.Command("ssh-keygen", "-t", "ed25519", "-f", sshKeyPath, "-N", "", "-q")
+    _, err = utils.Run(cmd)
+    Expect(err).NotTo(HaveOccurred())
+
+    pubKeyBytes, err := os.ReadFile(sshKeyPath + ".pub")
+    Expect(err).NotTo(HaveOccurred())
+
+    err = repoProvider.CreateSSHKey(username, password, "e2e-key", string(pubKeyBytes))
+    Expect(err).NotTo(HaveOccurred())
+
+    sshRepoURL, err := repoProvider.SSHRepoURL(username, repoName)
+    Expect(err).NotTo(HaveOccurred())
+
+    // Initialize repo via HTTP (SSH is for the operator, not test setup)
+    repoDir, err = utils.InitializeRepoWithFunction(repoURL, username, password, "go")
+    Expect(err).NotTo(HaveOccurred())
+    DeferCleanup(os.RemoveAll, repoDir)
+})
+```
+
+### SSH Auth Secret
+
+The operator authenticates SSH connections using a Kubernetes Secret with an `sshPrivateKey` field:
+
+```go
+secret := &v1.Secret{
+    ObjectMeta: metav1.ObjectMeta{
+        GenerateName: "git-ssh-auth-",
+        Namespace:    functionNamespace,
+    },
+    Data: map[string][]byte{
+        "sshPrivateKey": privateKeyBytes,
+    },
+}
+
+// Use in Function spec
+Spec: functionsdevv1alpha1.FunctionSpec{
+    Repository: functionsdevv1alpha1.FunctionSpecRepository{
+        URL: sshRepoURL,
+        AuthSecretRef: &v1.LocalObjectReference{
+            Name: secret.Name,
         },
     },
 }

@@ -280,79 +280,9 @@ spec:
 
 **Precedence:** Function-level settings always take priority over the operator default.
 
-## Development
+## Contributing
 
-### Local Development Cluster
-
-For local development, you can use the provided script to set up a Kind cluster with all prerequisites:
-
-```bash
-./hack/create-kind-cluster.sh
-```
-
-This script will:
-- Create a local Kind cluster with multiple worker nodes
-- Set up a local container registry on `localhost:5001`
-- Install Tekton Pipelines
-- Install Knative Serving with Kourier
-- Configure the cluster to use the local registry
-
-### Build and Install the Operator
-
-```bash
-make docker-build IMG=<your-registry>/func-operator:latest
-make deploy IMG=<your-registry>/func-operator:latest
-```
-
-### Debugging
-
-For debugging the operator with [Delve](https://github.com/go-delve/delve), use the debug targets:
-
-```bash
-# Build the debug image (includes Delve debugger and debug symbols)
-make docker-build-debugger IMAGE_TAG_BASE=<your-registry>/func-operator
-
-# Push the debug image
-make docker-push-debugger IMAGE_TAG_BASE=<your-registry>/func-operator
-
-# Deploy the operator in debug mode
-make deploy-debugger IMAGE_TAG_BASE=<your-registry>/func-operator
-```
-
-The debug deployment runs the operator under Delve in headless mode, listening on port 40000. To connect your debugger:
-
-```bash
-# Port-forward to access the debugger
-kubectl port-forward -n func-operator-system deployment/func-operator-controller-manager 40000:40000
-
-# Connect with Delve CLI
-dlv connect localhost:40000
-```
-
-You can also connect using your IDE's remote debugging features (VS Code, GoLand, etc.) by configuring it to connect to `localhost:40000`.
-
-### Run Tests
-
-```bash
-# Unit tests
-make test
-
-# E2E tests (requires Kind cluster with Gitea)
-make create-kind-cluster  # Sets up cluster with Gitea
-make test-e2e
-
-# Bundle tests
-make test-e2e-bundle
-```
-
-E2E tests use an in-cluster Gitea instance instead of GitHub, providing complete test isolation. See [Gitea Integration](docs/development/gitea-integration.md) for details on the test infrastructure.
-
-### Linting
-
-```bash
-# Run linter
-make lint
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and contribution guidelines.
 
 ## API Reference
 

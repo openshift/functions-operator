@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"github.com/functions-dev/func-operator/internal/funccli"
-	fn "github.com/functions-dev/func-operator/internal/function"
 	"github.com/functions-dev/func-operator/internal/git"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -200,7 +199,7 @@ func (r *FunctionReconciler) prepareSource(ctx context.Context, function *v1alph
 		return nil, nil, fmt.Errorf("failed to setup git repository: %w", err)
 	}
 
-	metadata, err := fn.Metadata(repo.Path())
+	metadata, err := funcfn.NewFunction(repo.Path())
 	if err != nil {
 		function.MarkSourceNotReady("MetadataReadFailed", "Failed to read function metadata: %s", err.Error())
 		return nil, nil, fmt.Errorf("failed to get function metadata: %w", err)

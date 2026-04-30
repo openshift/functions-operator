@@ -25,7 +25,6 @@ import (
 	"time"
 
 	functionsdevv1alpha1 "github.com/functions-dev/func-operator/api/v1alpha1"
-	"github.com/functions-dev/func-operator/internal/function"
 	"github.com/functions-dev/func-operator/test/utils"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -101,7 +100,7 @@ var _ = Describe("Middleware Update", func() {
 
 		It("should update the middleware and mark the function as ready", func() {
 			// Get function metadata to retrieve the deployed function name
-			funcMetadata, err := function.Metadata(repoDir)
+			funcMetadata, err := funcfn.NewFunction(repoDir)
 			Expect(err).NotTo(HaveOccurred())
 			deployedFunctionName := funcMetadata.Name
 

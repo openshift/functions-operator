@@ -3,16 +3,18 @@ package git
 import (
 	"context"
 	"fmt"
-	neturl "net/url"
 	"os"
-	"strings"
+	"path/filepath"
 
 	"github.com/functions-dev/func-operator/internal/monitoring"
 	"github.com/go-git/go-git/v6"
 	"github.com/go-git/go-git/v6/plumbing"
 	"github.com/go-git/go-git/v6/plumbing/client"
+	"github.com/go-git/go-git/v6/plumbing/transport"
 	"github.com/go-git/go-git/v6/plumbing/transport/http"
+	gitssh "github.com/go-git/go-git/v6/plumbing/transport/ssh"
 	"github.com/prometheus/client_golang/prometheus"
+	gossh "golang.org/x/crypto/ssh"
 )
 
 const (
@@ -27,6 +29,12 @@ func NewManager() (Manager, error) {
 	if err := os.MkdirAll(cloneBaseDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create git clone base directory: %w", err)
 	}
+	// go-git's SSH transport requires a known_hosts file for host key algorithm
+	// discovery, even when HostKeyCallback is already set. Without this file,
+	// SSH connections fail in containers that lack ~/.ssh/known_hosts.
+	if err := ensureKnownHostsExists(); err != nil {
+		return nil, fmt.Errorf("failed to ensure known_hosts exists: %w", err)
+	}
 	return &managerImpl{}, nil
 }
 
@@ -36,13 +44,12 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 	timer := prometheus.NewTimer(monitoring.GitCloneDuration)
 	defer timer.ObserveDuration()
 
-	url, err := neturl.Parse(repoUrl)
+	parsedURL, err := transport.ParseURL(repoUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse repository URL: %w", err)
 	}
 
-	pattern := fmt.Sprintf("%s-%s-%s", url.Host, strings.ReplaceAll(strings.TrimSuffix(url.Path, ".git"), "/", "-"), reference)
-	targetDir, err := os.MkdirTemp(cloneBaseDir, pattern)
+	targetDir, err := os.MkdirTemp(cloneBaseDir, "repo-*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
@@ -52,7 +59,7 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 		ReferenceName: plumbing.ReferenceName(reference),
 		SingleBranch:  true,
 		Depth:         1,
-		ClientOptions: m.getClientOptions(auth),
+		ClientOptions: m.getClientOptions(parsedURL.Scheme, auth),
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to clone repo: %w", err)
@@ -71,7 +78,14 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 	}, nil
 }
 
-func (m *managerImpl) getClientOptions(authSecret map[string][]byte) []client.Option {
+func (m *managerImpl) getClientOptions(scheme string, authSecret map[string][]byte) []client.Option {
+	if scheme == "ssh" {
+		return m.getSSHClientOptions(authSecret)
+	}
+	return m.getHTTPClientOptions(authSecret)
+}
+
+func (m *managerImpl) getHTTPClientOptions(authSecret map[string][]byte) []client.Option {
 	if len(authSecret) == 0 {
 		return nil
 	} else if token, ok := authSecret["token"]; ok {
@@ -91,6 +105,57 @@ func (m *managerImpl) getClientOptions(authSecret map[string][]byte) []client.Op
 			}
 		}
 		return nil
-	} // add other auth methods when needed
+	}
 	return nil
+}
+
+func ensureKnownHostsExists() error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	sshDir := filepath.Join(home, ".ssh")
+	if err := os.MkdirAll(sshDir, 0700); err != nil {
+		return err
+	}
+	knownHostsPath := filepath.Join(sshDir, "known_hosts")
+	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {
+		return os.WriteFile(knownHostsPath, nil, 0644)
+	}
+	return nil
+}
+
+func (m *managerImpl) getSSHClientOptions(authSecret map[string][]byte) []client.Option {
+	privateKey, hasKey := authSecret["sshPrivateKey"]
+	if !hasKey {
+		return []client.Option{
+			client.WithSSHAuth(&gitssh.Password{
+				User:                  "git",
+				HostKeyCallbackHelper: gitssh.HostKeyCallbackHelper{HostKeyCallback: gossh.InsecureIgnoreHostKey()},
+			}),
+		}
+	}
+
+	password := string(authSecret["sshPrivateKeyPassword"])
+	auth, err := gitssh.NewPublicKeys("git", privateKey, password)
+	if err != nil {
+		return nil
+	}
+	auth.HostKeyCallback = gossh.InsecureIgnoreHostKey()
+
+	if knownHostsData, ok := authSecret["known_hosts"]; ok {
+		tmpFile, err := os.CreateTemp("", "known_hosts-*")
+		if err == nil {
+			defer os.Remove(tmpFile.Name())
+			if _, err := tmpFile.Write(knownHostsData); err == nil {
+				_ = tmpFile.Close()
+				cb, err := gitssh.NewKnownHostsCallback(tmpFile.Name())
+				if err == nil {
+					auth.HostKeyCallback = cb
+				}
+			}
+		}
+	}
+
+	return []client.Option{client.WithSSHAuth(auth)}
 }

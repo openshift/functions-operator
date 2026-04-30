@@ -106,12 +106,61 @@ func functionNotReadyWithAuthError(functionName, functionNamespace string) func(
 					ContainSubstring("Authentication"),
 					ContainSubstring("401"),
 					ContainSubstring("Unauthorized"),
+					ContainSubstring("handshake failed"),
+					ContainSubstring("permission denied"),
+					ContainSubstring("ssh:"),
 				))
 				return
 			}
 		}
 		g.Expect(false).To(BeTrue(), "SourceReady condition not found")
 	}
+}
+
+// createSSHFunctionAndExpectReady creates a K8s Secret with the SSH private key, creates a Function
+// CR pointing at the SSH repo URL with authSecretRef, and waits for it to become Ready.
+// It returns the Function name so callers can store it for cleanup.
+func createSSHFunctionAndExpectReady(
+	sshKeyPath, sshRepoURL, functionNamespace, namePrefix string,
+) string {
+	privateKeyBytes, err := os.ReadFile(sshKeyPath)
+	Expect(err).NotTo(HaveOccurred())
+
+	secret := &v1.Secret{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: "git-ssh-auth-",
+			Namespace:    functionNamespace,
+		},
+		Data: map[string][]byte{
+			"sshPrivateKey": privateKeyBytes,
+		},
+	}
+	err = k8sClient.Create(ctx, secret)
+	Expect(err).NotTo(HaveOccurred())
+	utils.DeferCleanupOnSuccess(func() {
+		_ = k8sClient.Delete(ctx, secret)
+	})
+
+	function := &functionsdevv1alpha1.Function{
+		ObjectMeta: metav1.ObjectMeta{
+			GenerateName: namePrefix,
+			Namespace:    functionNamespace,
+		},
+		Spec: functionsdevv1alpha1.FunctionSpec{
+			Repository: functionsdevv1alpha1.FunctionSpecRepository{
+				URL: sshRepoURL,
+				AuthSecretRef: &v1.LocalObjectReference{
+					Name: secret.Name,
+				},
+			},
+		},
+	}
+
+	err = k8sClient.Create(ctx, function)
+	Expect(err).NotTo(HaveOccurred())
+
+	Eventually(functionBecomesReady(function.Name, functionNamespace)).Should(Succeed())
+	return function.Name
 }
 
 // functionNotDeployed check if the function is not ready as the function was not deployed yet
@@ -526,6 +575,177 @@ var _ = Describe("Operator", func() {
 
 				Eventually(functionNotReadyWithAuthError(functionName, functionNamespace), 2*time.Minute).Should(Succeed())
 			})
+		})
+	})
+	Context("with an SSH repository URL", func() {
+		var sshRepoURL string
+		var repoDir string
+		var sshKeyPath string
+		var functionName, functionNamespace string
+
+		BeforeEach(func() {
+			username, password, _, cleanup, err := repoProvider.CreateRandomUser()
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(cleanup)
+
+			repoName, repoURL, cleanup, err := repoProvider.CreateRandomRepo(username, false)
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(cleanup)
+
+			// Generate SSH keypair and register with Gitea
+			keyDir, err := os.MkdirTemp("", "ssh-e2e-*")
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(os.RemoveAll, keyDir)
+
+			sshKeyPath = filepath.Join(keyDir, "id_ed25519")
+			cmd := exec.Command("ssh-keygen", "-t", "ed25519", "-f", sshKeyPath, "-N", "", "-q")
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			pubKeyBytes, err := os.ReadFile(sshKeyPath + ".pub")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = repoProvider.CreateSSHKey(username, password, "e2e-key", string(pubKeyBytes))
+			Expect(err).NotTo(HaveOccurred())
+
+			sshRepoURL, err = repoProvider.SSHRepoURL(username, repoName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Initialize repository with function code (via HTTP)
+			repoDir, err = utils.InitializeRepoWithFunction(repoURL, username, password, "go")
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(os.RemoveAll, repoDir)
+
+			functionNamespace, err = utils.GetTestNamespace()
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(cleanupNamespaces, functionNamespace)
+
+			// Deploy function using func CLI
+			out, err := utils.RunFuncDeploy(repoDir, utils.WithNamespace(functionNamespace))
+			Expect(err).NotTo(HaveOccurred())
+			_, _ = fmt.Fprint(GinkgoWriter, out)
+
+			utils.DeferCleanupOnSuccess(func() {
+				_, _ = utils.RunFunc("delete", "--path", repoDir, "--namespace", functionNamespace)
+			})
+
+			// Commit func.yaml changes
+			err = utils.CommitAndPush(repoDir, "Update func.yaml after deploy", "func.yaml")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			logFailedTestDetails(functionName, functionNamespace)
+
+			if functionName != "" {
+				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
+				_, err := utils.Run(cmd)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		It("should mark the function as ready with SSH key auth", func() {
+			functionName = createSSHFunctionAndExpectReady(
+				sshKeyPath, sshRepoURL, functionNamespace, "my-ssh-function-")
+		})
+	})
+	Context("with a private SSH repository", func() {
+		var sshRepoURL string
+		var repoDir string
+		var username, password string
+		var sshKeyPath string
+		var functionName, functionNamespace string
+
+		BeforeEach(func() {
+			var cleanup func()
+			var err error
+			var repoName string
+			var repoURL string
+
+			username, password, _, cleanup, err = repoProvider.CreateRandomUser()
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(cleanup)
+
+			repoName, repoURL, cleanup, err = repoProvider.CreateRandomRepo(username, true)
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(cleanup)
+
+			// Generate SSH keypair and register with Gitea
+			keyDir, err := os.MkdirTemp("", "ssh-e2e-*")
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(os.RemoveAll, keyDir)
+
+			sshKeyPath = filepath.Join(keyDir, "id_ed25519")
+			cmd := exec.Command("ssh-keygen", "-t", "ed25519", "-f", sshKeyPath, "-N", "", "-q")
+			_, err = utils.Run(cmd)
+			Expect(err).NotTo(HaveOccurred())
+
+			pubKeyBytes, err := os.ReadFile(sshKeyPath + ".pub")
+			Expect(err).NotTo(HaveOccurred())
+
+			err = repoProvider.CreateSSHKey(username, password, "e2e-key", string(pubKeyBytes))
+			Expect(err).NotTo(HaveOccurred())
+
+			sshRepoURL, err = repoProvider.SSHRepoURL(username, repoName)
+			Expect(err).NotTo(HaveOccurred())
+
+			// Initialize repository with function code (via HTTP)
+			repoDir, err = utils.InitializeRepoWithFunction(repoURL, username, password, "go")
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(os.RemoveAll, repoDir)
+
+			functionNamespace, err = utils.GetTestNamespace()
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(cleanupNamespaces, functionNamespace)
+
+			// Deploy function using func CLI
+			out, err := utils.RunFuncDeploy(repoDir, utils.WithNamespace(functionNamespace))
+			Expect(err).NotTo(HaveOccurred())
+			_, _ = fmt.Fprint(GinkgoWriter, out)
+
+			utils.DeferCleanupOnSuccess(func() {
+				_, _ = utils.RunFunc("delete", "--path", repoDir, "--namespace", functionNamespace)
+			})
+
+			// Commit func.yaml changes
+			err = utils.CommitAndPush(repoDir, "Update func.yaml after deploy", "func.yaml")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			logFailedTestDetails(functionName, functionNamespace)
+
+			if functionName != "" {
+				cmd := exec.Command("kubectl", "delete", "function", functionName, "-n", functionNamespace, "--ignore-not-found")
+				_, err := utils.Run(cmd)
+				Expect(err).NotTo(HaveOccurred())
+			}
+		})
+
+		It("should mark the function as ready when SSH key authSecretRef is provided", func() {
+			functionName = createSSHFunctionAndExpectReady(
+				sshKeyPath, sshRepoURL, functionNamespace, "my-ssh-private-function-")
+		})
+
+		It("should fail with authentication error when authSecretRef is not provided", func() {
+			function := &functionsdevv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "my-ssh-private-function-noauth-",
+					Namespace:    functionNamespace,
+				},
+				Spec: functionsdevv1alpha1.FunctionSpec{
+					Repository: functionsdevv1alpha1.FunctionSpecRepository{
+						URL: sshRepoURL,
+					},
+				},
+			}
+
+			err := k8sClient.Create(ctx, function)
+			Expect(err).NotTo(HaveOccurred())
+
+			functionName = function.Name
+
+			Eventually(functionNotReadyWithAuthError(functionName, functionNamespace), 2*time.Minute).Should(Succeed())
 		})
 	})
 })

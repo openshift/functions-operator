@@ -126,6 +126,66 @@ spec:
       name: git-credentials
 ```
 
+#### SSH Key Authentication
+
+For SSH-based repository access, create a secret with the SSH private key:
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: git-ssh-credentials
+  namespace: default
+data:
+  sshPrivateKey: <base64-encoded-private-key>
+```
+
+Optional fields:
+- `sshPrivateKeyPassword`: Passphrase for encrypted private keys
+- `known_hosts`: SSH known_hosts file content for host key verification. If omitted, host key checking is skipped.
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: git-ssh-credentials
+  namespace: default
+data:
+  sshPrivateKey: <base64-encoded-private-key>
+  sshPrivateKeyPassword: <base64-encoded-passphrase>
+  known_hosts: <base64-encoded-known-hosts>
+```
+
+Reference it in the Function with an SSH repository URL:
+
+```yaml
+apiVersion: functions.dev/v1alpha1
+kind: Function
+metadata:
+  name: my-function
+  namespace: default
+spec:
+  repository:
+    url: git@github.com:your-org/your-function.git
+    authSecretRef:
+      name: git-ssh-credentials
+```
+
+For public repositories accessible over SSH, no secret is needed:
+
+```yaml
+apiVersion: functions.dev/v1alpha1
+kind: Function
+metadata:
+  name: my-function
+  namespace: default
+spec:
+  repository:
+    url: git@github.com:your-org/your-function.git
+```
+
+Both SCP-style URLs (`git@host:path`) and standard SSH URLs (`ssh://git@host/path`) are supported.
+
 ### Check Function Status
 
 The Function CRD has the short name `func`, so you can use `kubectl get func` instead of `kubectl get function`.
@@ -300,7 +360,7 @@ make lint
 
 | Field                       | Type    | Required | Description                                                                                      |
 |-----------------------------|---------|----------|--------------------------------------------------------------------------------------------------|
-| `repository.url`            | string  | Yes      | URL of the Git repository containing the function                                                |
+| `repository.url`            | string  | Yes      | URL of the Git repository. Supports HTTPS, HTTP, SSH (`ssh://`), and SCP-style (`git@host:path`) |
 | `repository.branch`         | string  | No       | Branch of the repository                                                                         |
 | `repository.path`           | string  | No       | Path to the function inside the repository. Defaults to "."                                      |
 | `repository.authSecretRef`  | object  | No       | Reference to the auth secret for private repository authentication                               |

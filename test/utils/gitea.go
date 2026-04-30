@@ -46,14 +46,19 @@ type RepositoryProvider interface {
 
 	// Authentication
 	CreateAccessToken(username, password, tokenName string) (string, error)
+
+	// SSH support
+	CreateSSHKey(username, password, title, publicKey string) error
+	SSHRepoURL(owner, repo string) (string, error)
 }
 
 // GiteaClient wraps the Gitea SDK client and provides helper methods
 type GiteaClient struct {
-	client    *gitea.Client
-	baseURL   string
-	adminUser string
-	adminPass string
+	client      *gitea.Client
+	baseURL     string
+	sshEndpoint string
+	adminUser   string
+	adminPass   string
 }
 
 // NewGiteaClient discovers Gitea endpoint from ConfigMap and creates client
@@ -87,6 +92,11 @@ func NewGiteaClient() (*GiteaClient, error) {
 		return nil, fmt.Errorf("gitea-endpoint configmap missing 'http' key")
 	}
 
+	sshEndpoint, ok := cm.Data["ssh"]
+	if !ok {
+		return nil, fmt.Errorf("gitea-endpoint configmap missing 'ssh' key")
+	}
+
 	// Create Gitea SDK client
 	giteaClient, err := gitea.NewClient(baseURL, gitea.SetBasicAuth(giteaAdminUser, giteaAdminPass))
 	if err != nil {
@@ -94,10 +104,11 @@ func NewGiteaClient() (*GiteaClient, error) {
 	}
 
 	return &GiteaClient{
-		client:    giteaClient,
-		baseURL:   baseURL,
-		adminUser: giteaAdminUser,
-		adminPass: giteaAdminPass,
+		client:      giteaClient,
+		baseURL:     baseURL,
+		sshEndpoint: sshEndpoint,
+		adminUser:   giteaAdminUser,
+		adminPass:   giteaAdminPass,
 	}, nil
 }
 
@@ -173,6 +184,30 @@ func (g *GiteaClient) CreateRandomRepo(owner string, private bool) (name, url st
 	name = "repo-" + rand.String(8)
 	url, cleanup, err = g.CreateRepo(owner, name, private)
 	return name, url, cleanup, err
+}
+
+// CreateSSHKey registers an SSH public key for a Gitea user
+func (g *GiteaClient) CreateSSHKey(username, password, title, publicKey string) error {
+	userClient, err := gitea.NewClient(g.baseURL, gitea.SetBasicAuth(username, password))
+	if err != nil {
+		return fmt.Errorf("failed to create user client: %w", err)
+	}
+
+	_, _, err = userClient.CreatePublicKey(gitea.CreateKeyOption{
+		Title: title,
+		Key:   publicKey,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to create SSH key for %s: %w", username, err)
+	}
+
+	return nil
+}
+
+// SSHRepoURL returns the SSH URL for a repository.
+// The SSH endpoint format from the ConfigMap is "host:port".
+func (g *GiteaClient) SSHRepoURL(owner, repo string) (string, error) {
+	return fmt.Sprintf("ssh://git@%s/%s/%s.git", g.sshEndpoint, owner, repo), nil
 }
 
 // CreateAccessToken creates a personal access token for a user

@@ -530,6 +530,72 @@ var _ = Describe("Function Controller", func() {
 				},
 			}),
 		)
+
+		It("should pass ImagePullSecret to deploy when registry authSecretRef is set", func() {
+			registrySecretName := "my-registry-secret"
+
+			By("Creating the registry auth secret")
+			secret := &v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      registrySecretName,
+					Namespace: resourceNamespace,
+				},
+				Type: v1.SecretTypeDockerConfigJson,
+				Data: map[string][]byte{
+					v1.DockerConfigJsonKey: []byte(`{"auths":{"registry.example.com":{"auth":"dGVzdDp0ZXN0"}}}`),
+				},
+			}
+			Expect(k8sClient.Create(ctx, secret)).To(Succeed())
+			defer func() { _ = k8sClient.Delete(ctx, secret) }()
+
+			By("Creating the Function with registry authSecretRef")
+			spec := functionsdevv1alpha1.FunctionSpec{
+				Repository: functionsdevv1alpha1.FunctionSpecRepository{
+					URL:    "https://github.com/foo/bar",
+					Branch: "my-branch",
+				},
+				Registry: functionsdevv1alpha1.FunctionSpecRegistry{
+					AuthSecretRef: &v1.LocalObjectReference{
+						Name: registrySecretName,
+					},
+				},
+			}
+			Expect(createFunctionResource(resourceName, resourceNamespace, spec)).To(Succeed())
+
+			By("Setting up mocks")
+			funcCliManagerMock := funccli.NewMockManager(GinkgoT())
+			gitManagerMock := git.NewMockManager(GinkgoT())
+
+			funcCliManagerMock.EXPECT().Describe(mock.Anything, functionName, resourceNamespace).Return(functions.Instance{
+				Middleware: functions.Middleware{Version: "v1.0.0"},
+			}, nil)
+			funcCliManagerMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v2.0.0", nil)
+
+			funcCliManagerMock.EXPECT().Deploy(mock.Anything, mock.Anything, resourceNamespace, mock.MatchedBy(func(opts funccli.DeployOptions) bool {
+				return opts.ImagePullSecret == registrySecretName && opts.RegistryAuthFile != ""
+			})).Return(nil)
+
+			gitManagerMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+
+			operatorNs := fmt.Sprintf("func-operator-%s", rand.String(6))
+			Expect(createNamespace(operatorNs)).To(Succeed())
+			Expect(createControllerConfig(operatorNs, nil)).To(Succeed())
+
+			By("Reconciling")
+			controllerReconciler := &FunctionReconciler{
+				Client:            k8sClient,
+				Scheme:            k8sClient.Scheme(),
+				Recorder:          &events.FakeRecorder{},
+				FuncCliManager:    funcCliManagerMock,
+				GitManager:        gitManagerMock,
+				OperatorNamespace: operatorNs,
+			}
+
+			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{
+				NamespacedName: typeNamespacedName,
+			})
+			Expect(err).NotTo(HaveOccurred())
+		})
 	})
 })
 

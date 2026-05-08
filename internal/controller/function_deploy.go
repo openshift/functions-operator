@@ -49,6 +49,7 @@ func (r *FunctionReconciler) deploy(ctx context.Context, function *v1alpha1.Func
 		defer os.Remove(authFile)
 
 		deployOptions.RegistryAuthFile = authFile
+		deployOptions.ImagePullSecret = function.Spec.Registry.AuthSecretRef.Name
 	}
 
 	logger.Info("Deploying function", "deployOptions", deployOptions)

@@ -17,6 +17,7 @@ limitations under the License.
 package e2e
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -30,6 +31,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	funcfn "knative.dev/func/pkg/functions"
 )
 
 // expectFunctionConditionTrue returns a Gomega function that checks if a Function
@@ -744,6 +746,135 @@ var _ = Describe("Operator", func() {
 			functionName = function.Name
 
 			Eventually(functionNotReadyWithAuthError(functionName, functionNamespace), 2*time.Minute).Should(Succeed())
+		})
+	})
+	// This test verifies that the operator passes the registry auth secret as
+	// --image-pull-secret to the func CLI during a redeploy, which causes the
+	// func CLI to set imagePullSecrets on the function's pod spec.
+	//
+	// It uses a dummy dockerconfigjson secret and the unauthenticated kind-registry
+	// because the kind-registry's built-in htpasswd auth is all-or-nothing (no
+	// per-repository scoping), so enabling auth would break all other tests. The
+	// unit tests in function_controller_test.go verify the --image-pull-secret flag
+	// is passed; this test confirms the Knative Service's pod template actually
+	// receives the imagePullSecrets after a real redeploy.
+	Context("with a registry auth secret", func() {
+		var repoURL string
+		var repoDir string
+		var functionName, functionNamespace string
+
+		BeforeEach(func() {
+			if os.Getenv("DEFAULT_DEPLOYER") == "keda" ||
+				os.Getenv("DEFAULT_DEPLOYER") == "raw" {
+				Skip("Skipping registry auth test for Keda & raw deployer, " +
+					"as test inspect KService directly")
+			}
+
+			var err error
+
+			username, password, _, cleanup, err := repoProvider.CreateRandomUser()
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(cleanup)
+
+			_, repoURL, cleanup, err = repoProvider.CreateRandomRepo(username, false)
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(cleanup)
+
+			functionNamespace, err = utils.GetTestNamespace()
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(cleanupNamespaces, functionNamespace)
+
+			oldFuncVersion := "v1.20.2"
+			repoDir, err = utils.InitializeRepoWithFunction(
+				repoURL,
+				username,
+				password,
+				"go",
+				utils.WithCliVersion(oldFuncVersion))
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(os.RemoveAll, repoDir)
+
+			out, err := utils.RunFuncDeploy(repoDir,
+				utils.WithNamespace(functionNamespace),
+				utils.WithDeployCliVersion(oldFuncVersion))
+			Expect(err).NotTo(HaveOccurred())
+			_, _ = fmt.Fprint(GinkgoWriter, out)
+
+			utils.DeferCleanupOnSuccess(func() {
+				_, _ = utils.RunFunc("delete", "--path", repoDir, "--namespace", functionNamespace)
+			})
+
+			err = utils.CommitAndPush(repoDir, "Update func.yaml after deploy", "func.yaml")
+			Expect(err).NotTo(HaveOccurred())
+		})
+
+		AfterEach(func() {
+			logFailedTestDetails(functionName, functionNamespace)
+		})
+
+		It("should set imagePullSecrets on the Knative Service", func() {
+			funcMetadata, err := funcfn.NewFunction(repoDir)
+			Expect(err).NotTo(HaveOccurred())
+			deployedFunctionName := funcMetadata.Name
+
+			secret := &v1.Secret{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "registry-auth-",
+					Namespace:    functionNamespace,
+				},
+				Type: v1.SecretTypeDockerConfigJson,
+				Data: map[string][]byte{
+					v1.DockerConfigJsonKey: []byte(`{"auths":{"kind-registry:5000":{"auth":"dGVzdDp0ZXN0"}}}`),
+				},
+			}
+			err = k8sClient.Create(ctx, secret)
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(func() {
+				_ = k8sClient.Delete(ctx, secret)
+			})
+
+			function := &functionsdevv1alpha1.Function{
+				ObjectMeta: metav1.ObjectMeta{
+					GenerateName: "my-function-pullsecret-",
+					Namespace:    functionNamespace,
+				},
+				Spec: functionsdevv1alpha1.FunctionSpec{
+					Repository: functionsdevv1alpha1.FunctionSpecRepository{
+						URL: repoURL,
+					},
+					Registry: functionsdevv1alpha1.FunctionSpecRegistry{
+						AuthSecretRef: &v1.LocalObjectReference{
+							Name: secret.Name,
+						},
+					},
+				},
+			}
+
+			err = k8sClient.Create(ctx, function)
+			Expect(err).NotTo(HaveOccurred())
+			utils.DeferCleanupOnSuccess(func() {
+				_, _ = utils.RunCmd("kubectl", "delete", "function", function.Name, "--namespace", function.Namespace)
+			})
+
+			functionName = function.Name
+
+			Eventually(functionBecomesReady(functionName, functionNamespace)).Should(Succeed())
+
+			// Verify the Knative Service has imagePullSecrets set on its pod template.
+			Eventually(func(g Gomega) {
+				cmd := exec.Command("kubectl", "get", "ksvc", deployedFunctionName,
+					"-n", functionNamespace,
+					"-o", "jsonpath={.spec.template.spec.imagePullSecrets}")
+				out, err := utils.Run(cmd)
+				g.Expect(err).NotTo(HaveOccurred())
+				g.Expect(out).NotTo(BeEmpty(), "imagePullSecrets not set on Knative Service %s", deployedFunctionName)
+
+				var pullSecrets []v1.LocalObjectReference
+				g.Expect(json.Unmarshal([]byte(out), &pullSecrets)).To(Succeed())
+				g.Expect(pullSecrets).To(ContainElement(v1.LocalObjectReference{
+					Name: secret.Name,
+				}))
+			}, 2*time.Minute).Should(Succeed())
 		})
 	})
 })

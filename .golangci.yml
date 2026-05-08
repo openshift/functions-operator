@@ -34,9 +34,11 @@ linters:
           - lll
         path: api/*
       - linters:
-          - dupl
           - lll
         path: internal/*
+      - linters:
+          - dupl
+        path: test/*
       # ignore errcheck in defer
       - linters:
           - errcheck

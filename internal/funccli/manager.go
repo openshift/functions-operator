@@ -43,6 +43,7 @@ type Manager interface {
 
 type DeployOptions struct {
 	RegistryAuthFile string
+	ImagePullSecret  string
 }
 
 var _ Manager = &managerImpl{}
@@ -221,6 +222,10 @@ func (m *managerImpl) Deploy(ctx context.Context, repoPath string, namespace str
 
 	if opts.RegistryAuthFile != "" {
 		deployArgs = append(deployArgs, "--registry-authfile", opts.RegistryAuthFile)
+	}
+
+	if opts.ImagePullSecret != "" {
+		deployArgs = append(deployArgs, "--image-pull-secret", opts.ImagePullSecret)
 	}
 
 	out, err := m.Run(ctx, repoPath, deployArgs...)

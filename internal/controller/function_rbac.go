@@ -71,6 +71,10 @@ func (r *FunctionReconciler) ensureDeployFunctionRole(ctx context.Context, names
 				Resources: []string{"services", "pods"},
 				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},
 			}, {
+				APIGroups: []string{""},
+				Resources: []string{"secrets"},
+				Verbs:     []string{"get", "list"},
+			}, {
 				APIGroups: []string{"http.keda.sh"},
 				Resources: []string{"httpscaledobjects"},
 				Verbs:     []string{"create", "delete", "get", "list", "patch", "update", "watch"},

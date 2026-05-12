@@ -17,15 +17,14 @@ limitations under the License.
 package utils
 
 import (
+	"context"
 	"fmt"
-	"io"
-	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"time"
 
+	"github.com/functions-dev/func-operator/internal/funccli"
 	ginkgo "github.com/onsi/ginkgo/v2"
 )
 
@@ -202,42 +201,20 @@ func ensureFuncVersion(version string) (string, error) {
 
 // downloadFuncVersion downloads the specified func version from GitHub releases
 func downloadFuncVersion(version, versionDir, funcBinary string) error {
-	// Create version directory
-	if err := os.MkdirAll(versionDir, 0755); err != nil {
+	if err := os.MkdirAll(versionDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create version directory: %w", err)
 	}
 
-	// Construct download URL
-	goos := runtime.GOOS
-	goarch := runtime.GOARCH
-	url := fmt.Sprintf("https://github.com/knative/func/releases/download/knative-%s/func_%s_%s",
-		version, goos, goarch)
+	asset := funccli.AssetName()
+	base := "https://github.com/knative/func/releases/download/knative-" + version
+	binaryURL := base + "/" + asset
+	checksumURL := base + "/checksums.txt"
 
-	// Download binary
-	resp, err := http.Get(url)
-	if err != nil {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	defer cancel()
+
+	if err := funccli.DownloadAndInstall(ctx, binaryURL, checksumURL, funcBinary, nil); err != nil {
 		return fmt.Errorf("failed to download func %s: %w", version, err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to download func %s: HTTP %d", version, resp.StatusCode)
-	}
-
-	// Write to file
-	out, err := os.Create(funcBinary)
-	if err != nil {
-		return fmt.Errorf("failed to create binary file: %w", err)
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, resp.Body); err != nil {
-		return fmt.Errorf("failed to write binary: %w", err)
-	}
-
-	// Make executable
-	if err := os.Chmod(funcBinary, 0755); err != nil {
-		return fmt.Errorf("failed to make binary executable: %w", err)
 	}
 
 	return nil

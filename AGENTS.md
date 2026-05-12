@@ -57,6 +57,9 @@ Read these files to understand the project setup, conventions, and development w
 
 - `README.md` - user-facing usage, API reference table, installation
 - `CONTRIBUTING.md` - development setup, workflow, coding conventions
+- `docs/architecture.md` - system architecture, reconciliation flow, component interactions
+- `docs/release.md` - release process, branching model, versioning
 - `docs/development/` - developer guides (e.g. Gitea integration, test patterns)
+- `docs/plans/` - design documents capturing rationale and tradeoffs for past decisions
 
 After implementing a feature or making significant changes, check whether these docs need updating. The API reference table in README.md must stay in sync with `api/v1alpha1/function_types.go`.

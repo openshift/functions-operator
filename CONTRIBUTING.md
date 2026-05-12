@@ -17,6 +17,12 @@ If you find a bug or have a feature request, please [open an issue](https://gith
 
 All CI checks must pass before a pull request can be merged.
 
+## Further Reading
+
+- [Architecture Overview](docs/architecture.md) — system components, reconciliation flow, CRD lifecycle
+- [Release Process](docs/release.md) — branching model, versioning, automated tag management
+- [Gitea Integration](docs/development/gitea-integration.md) — e2e test infrastructure details
+
 ## Development
 
 ### Prerequisites

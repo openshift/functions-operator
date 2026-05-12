@@ -17,6 +17,10 @@ If you find a bug or have a feature request, please [open an issue](https://gith
 
 All CI checks must pass before a pull request can be merged.
 
+### Backporting Changes
+
+To backport a merged PR to a release branch, comment `/cherry-pick release-X.Y` on the PR. This automatically creates a new PR with the cherry-picked changes against the target branch.
+
 ## Further Reading
 
 - [Architecture Overview](docs/architecture.md) — system components, reconciliation flow, CRD lifecycle

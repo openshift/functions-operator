@@ -12,12 +12,12 @@ Kubernetes operator (controller-runtime) for managing middleware updates for ser
 
 Before committing, test locally following the table below:
 
-| If changed | Target | Description |
-|------------|--------|-------------|
-| `*.go` files | `make test` | Unit tests |
-| Any files | `make lint` | Linting |
-| `api/` types | `make manifests generate` | Regenerate CRDs and DeepCopy |
-| Significant changes | `make test-e2e` | E2E tests (Kind cluster with Gitea required) |
+| If changed                 | Target                | Description                                                                                                                                                                                                   |
+|----------------------------|-----------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `*.go` files               | `make test`           | Unit tests                                                                                                                                                                                                    |
+| Any files                  | `make lint`           | Linting                                                                                                                                                                                                       |
+| `api/` types or interfaces | `make update-codegen` | Regenerate CRDs, DeepCopy, and mock implementations                                                                                                                                                           |
+| Significant changes        | `make test-e2e`       | E2E tests (Kind cluster with Gitea required - check the [CONTRIBUTING.md](CONTRIBUTING.md#local-development-cluster), for how to setup a local development cluster and how to build and install the operator) |
 
 ## Project Structure
 

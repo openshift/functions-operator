@@ -308,6 +308,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and contr
 | `git.lastChecked` | timestamp | Last time the repository was checked |
 | `deployment.image` | string | Container image of the deployed function |
 | `deployment.imageBuilt` | timestamp | When the current image was built |
+| `deployment.revision` | string | Current revision of the deployed service |
 | `deployment.deployer` | string | Tool/method used to deploy the function (e.g., "func") |
 | `deployment.runtime` | string | Detected function runtime |
 | `middleware.current` | string | Current middleware version in use |
@@ -318,6 +319,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and contr
 | `middleware.lastRebuild` | timestamp | Last time the function was rebuilt for middleware updates |
 | `service.url` | string | URL of the function's service |
 | `service.ready` | string | Whether the function's service is ready (e.g., "true", "false", "UNKNOWN") |
+| `history` | array | Last 20 reconciliation events with timestamp and message |
 
 #### Status Conditions
 

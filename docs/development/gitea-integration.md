@@ -44,17 +44,39 @@ BeforeEach(func() {
 ### Available Helper Methods
 
 **RepositoryProvider Interface:**
-- `CreateUser(username, password, email string) (cleanup func(), err error)` - Create user with cleanup function
-- `CreateRandomUser() (username, password, email string, cleanup func(), err error)` - Create user with random credentials
-- `CreateRepo(owner, name string, private bool) (url string, cleanup func(), err error)` - Create repository
-- `CreateRandomRepo(owner string, private bool) (name, url string, cleanup func(), err error)` - Create repo with random name
-- `CreateAccessToken(username, password, tokenName string) (string, error)` - Generate access token
-- `CreateSSHKey(username, password, title, publicKey string) error` - Register SSH public key for user
-- `SSHRepoURL(owner, repo string) (string, error)` - Get SSH URL for a repository
+- `CreateUser(username, password, email string) (cleanup func(), err error)` — Create user with cleanup function
+- `DeleteUser(username string) error` — Delete a user and all their data
+- `CreateRandomUser() (username, password, email string, cleanup func(), err error)` — Create user with random credentials
+- `CreateRepo(owner, name string, private bool) (url string, cleanup func(), err error)` — Create repository
+- `DeleteRepo(owner, name string) error` — Delete a repository
+- `CreateRandomRepo(owner string, private bool) (name, url string, cleanup func(), err error)` — Create repo with random name
+- `CreateAccessToken(username, password, tokenName string) (string, error)` — Generate access token
+- `CreateSSHKey(username, password, title, publicKey string) error` — Register SSH public key for user
+- `SSHRepoURL(owner, repo string) (string, error)` — Get SSH URL for a repository
 
-**E2E Helper Functions:**
-- `InitializeRepoWithFunction(url, user, pass, lang)` - Clone, init function, push
-- `CommitAndPush(repoDir, msg, file, ...otherFiles)` - Commit and push files
+Note: `CreateUser`, `CreateRepo`, and `CreateRandomRepo` return cleanup functions that call `DeleteUser`/`DeleteRepo` internally. Prefer `DeferCleanup(cleanup)` over calling the delete methods directly.
+
+**Git Helper Functions:**
+- `InitializeRepoWithFunction(url, user, pass, lang string, opts ...RepoOption) (repoDir string, err error)` — Clone, init function, push
+- `CommitAndPush(repoDir, msg, file string, otherFiles ...string) error` — Commit and push files
+
+`InitializeRepoWithFunction` accepts functional options:
+- `WithSubDir(subDir string)` — Place the function in a subdirectory (for monorepo testing)
+- `WithCliVersion(version string)` — Use a specific func CLI version to initialize the function
+
+**func CLI Helper Functions:**
+- `RunFunc(command string, args ...string) (string, error)` — Run the current/latest func CLI
+- `RunFuncWithVersion(version, command string, args ...string) (string, error)` — Run a specific func CLI version (downloads and caches automatically)
+- `RunFuncDeploy(functionDir string, opts ...FuncDeployOption) (string, error)` — Deploy a function with retry logic
+
+`RunFuncDeploy` accepts functional options:
+- `WithNamespace(namespace string)` — Target namespace
+- `WithBuilder(builder string)` — Builder to use (e.g. `pack`, `s2i`)
+- `WithDeployer(deployer string)` — Deployer to use (e.g. `knative`, `keda`)
+- `WithDeployCliVersion(version string)` — Use a specific func CLI version
+- `WithEnvVars(envVars map[string]string)` — Set environment variables for the deploy command
+
+Defaults for `RunFuncDeploy` are read from environment variables: `REGISTRY` (or `REGISTRY_URL`), `REGISTRY_INSECURE`, `DEFAULT_BUILDER`, `DEFAULT_DEPLOYER`.
 
 ### DeferCleanup Pattern
 

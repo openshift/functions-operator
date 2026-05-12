@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/functions-dev/func-operator/internal/funccli"
@@ -176,7 +177,8 @@ func WithEnvVars(envVars map[string]string) FuncDeployOption {
 	}
 }
 
-// ensureFuncVersion ensures the specified func version is available and returns its path
+// ensureFuncVersion ensures the specified func version is available and returns its path.
+// Uses file locking to prevent parallel Ginkgo processes from racing on the download.
 func ensureFuncVersion(version string) (string, error) {
 	projectDir, err := GetProjectDir()
 	if err != nil {
@@ -186,25 +188,46 @@ func ensureFuncVersion(version string) (string, error) {
 	versionDir := filepath.Join(projectDir, "bin", "func-cli", version)
 	funcBinary := filepath.Join(versionDir, "func")
 
-	// Check if already cached
+	// Fast path: binary already exists, no lock needed
+	if _, err := os.Stat(funcBinary); err == nil {
+		return funcBinary, nil
+	}
+
+	// Ensure the directory exists before creating the lock file
+	if err := os.MkdirAll(versionDir, 0755); err != nil {
+		return "", fmt.Errorf("failed to create version directory: %w", err)
+	}
+
+	// Acquire an exclusive file lock so only one Ginkgo process downloads at a time.
+	// Ginkgo's -p flag runs specs in separate OS processes, so sync.Mutex doesn't work.
+	lockFile, err := os.OpenFile(filepath.Join(versionDir, ".lock"), os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		return "", fmt.Errorf("failed to create lock file: %w", err)
+	}
+	defer lockFile.Close()
+
+	if err := syscall.Flock(int(lockFile.Fd()), syscall.LOCK_EX); err != nil {
+		return "", fmt.Errorf("failed to acquire file lock: %w", err)
+	}
+	defer syscall.Flock(int(lockFile.Fd()), syscall.LOCK_UN) //nolint:errcheck
+
+	// Re-check after acquiring the lock — another process may have finished the download
 	if _, err := os.Stat(funcBinary); err == nil {
 		return funcBinary, nil
 	}
 
 	// Download the version
-	if err := downloadFuncVersion(version, versionDir, funcBinary); err != nil {
+	if err := downloadFuncVersion(version, funcBinary); err != nil {
 		return "", err
 	}
 
 	return funcBinary, nil
 }
 
-// downloadFuncVersion downloads the specified func version from GitHub releases
-func downloadFuncVersion(version, versionDir, funcBinary string) error {
-	if err := os.MkdirAll(versionDir, 0o755); err != nil {
-		return fmt.Errorf("failed to create version directory: %w", err)
-	}
-
+// downloadFuncVersion downloads the specified func version from GitHub releases.
+// It writes to a temporary file first and atomically renames it to avoid exposing
+// a partially-written binary to other processes.
+func downloadFuncVersion(version, funcBinary string) error {
 	asset := funccli.AssetName()
 	base := "https://github.com/knative/func/releases/download/knative-" + version
 	binaryURL := base + "/" + asset

@@ -131,7 +131,3 @@ type FunctionList struct {
 	metav1.ListMeta `json:"metadata,omitempty"`
 	Items           []Function `json:"items"`
 }
-
-func init() {
-	SchemeBuilder.Register(&Function{}, &FunctionList{})
-}

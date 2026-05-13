@@ -3,7 +3,7 @@ module github.com/functions-dev/func-operator
 go 1.26.0
 
 require (
-	code.gitea.io/sdk/gitea v0.25.0
+	code.gitea.io/sdk/gitea v0.25.1
 	github.com/go-git/go-git/v6 v6.0.0-alpha.3
 	github.com/go-logr/logr v1.4.3
 	github.com/onsi/ginkgo/v2 v2.28.3

@@ -2,6 +2,7 @@ package git
 
 import (
 	"context"
+	"os"
 	"testing"
 
 	"github.com/go-git/go-git/v6/plumbing/transport"
@@ -88,6 +89,25 @@ func TestGetClientOptions_SSHWithPrivateKey(t *testing.T) {
 	if len(opts) != 1 {
 		t.Fatalf("expected 1 option, got %d", len(opts))
 	}
+}
+
+func TestGetClientOptions_SSHWithPrivateKeyAndKnownHosts(t *testing.T) {
+	m := &managerImpl{}
+	secret := map[string][]byte{
+		"sshPrivateKey": []byte(testEd25519PrivateKey),
+		"known_hosts":   []byte("github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl\n"),
+	}
+	opts, tmpFile, err := m.getClientOptions(context.Background(), sshScheme, secret)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(opts) != 1 {
+		t.Fatalf("expected 1 option, got %d", len(opts))
+	}
+	if tmpFile == "" {
+		t.Fatal("expected temp known_hosts file path, got empty string")
+	}
+	defer os.Remove(tmpFile)
 }
 
 func TestGetClientOptions_SSHWithInvalidKey(t *testing.T) {

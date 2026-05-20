@@ -160,16 +160,22 @@ func (m *managerImpl) getSSHClientOptions(ctx context.Context, authSecret map[st
 	var tempFilePath string
 	if knownHostsData, ok := authSecret["known_hosts"]; ok {
 		tmpFile, err := os.CreateTemp("", "known_hosts-*")
-		if err == nil {
-			if _, err := tmpFile.Write(knownHostsData); err == nil {
-				_ = tmpFile.Close()
-				tempFilePath = tmpFile.Name()
-				cb, err := gitssh.NewKnownHostsCallback(tempFilePath)
-				if err == nil {
-					auth.HostKeyCallback = cb
-				}
-			}
+		if err != nil {
+			return nil, "", fmt.Errorf("failed to create known_hosts temp file: %w", err)
 		}
+		if _, err := tmpFile.Write(knownHostsData); err != nil {
+			_ = tmpFile.Close()
+			_ = os.Remove(tmpFile.Name())
+			return nil, "", fmt.Errorf("failed to write known_hosts temp file: %w", err)
+		}
+		_ = tmpFile.Close()
+		tempFilePath = tmpFile.Name()
+		cb, err := gitssh.NewKnownHostsCallback(tempFilePath)
+		if err != nil {
+			_ = os.Remove(tempFilePath)
+			return nil, "", fmt.Errorf("failed to configure known_hosts callback: %w", err)
+		}
+		auth.HostKeyCallback = cb
 	} else {
 		logger.Info("SSH host key verification is disabled, provide known_hosts in auth secret to enable verification")
 		auth.HostKeyCallback = gossh.InsecureIgnoreHostKey()

@@ -15,6 +15,7 @@ import (
 	gitssh "github.com/go-git/go-git/v6/plumbing/transport/ssh"
 	"github.com/prometheus/client_golang/prometheus"
 	gossh "golang.org/x/crypto/ssh"
+	"sigs.k8s.io/controller-runtime/pkg/log"
 )
 
 const (
@@ -54,7 +55,7 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
-	clientOpts, tempFile, err := m.getClientOptions(parsedURL.Scheme, auth)
+	clientOpts, tempFile, err := m.getClientOptions(ctx, parsedURL.Scheme, auth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure auth: %w", err)
 	}
@@ -89,9 +90,9 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 	}, nil
 }
 
-func (m *managerImpl) getClientOptions(scheme string, authSecret map[string][]byte) ([]client.Option, string, error) {
+func (m *managerImpl) getClientOptions(ctx context.Context, scheme string, authSecret map[string][]byte) ([]client.Option, string, error) {
 	if scheme == "ssh" {
-		return m.getSSHClientOptions(authSecret)
+		return m.getSSHClientOptions(ctx, authSecret)
 	}
 	opts := m.getHTTPClientOptions(authSecret)
 	return opts, "", nil
@@ -137,9 +138,12 @@ func ensureKnownHostsExists() error {
 	return nil
 }
 
-func (m *managerImpl) getSSHClientOptions(authSecret map[string][]byte) ([]client.Option, string, error) {
+func (m *managerImpl) getSSHClientOptions(ctx context.Context, authSecret map[string][]byte) ([]client.Option, string, error) {
+	logger := log.FromContext(ctx)
+
 	privateKey, hasKey := authSecret["sshPrivateKey"]
 	if !hasKey {
+		logger.Info("SSH host key verification is disabled, no SSH credentials provided in auth secret")
 		return []client.Option{
 			client.WithSSHAuth(&gitssh.Password{
 				User:                  "git",
@@ -153,8 +157,6 @@ func (m *managerImpl) getSSHClientOptions(authSecret map[string][]byte) ([]clien
 	if err != nil {
 		return nil, "", fmt.Errorf("failed to parse SSH private key: %w", err)
 	}
-	auth.HostKeyCallback = gossh.InsecureIgnoreHostKey()
-
 	var tempFilePath string
 	if knownHostsData, ok := authSecret["known_hosts"]; ok {
 		tmpFile, err := os.CreateTemp("", "known_hosts-*")
@@ -168,6 +170,9 @@ func (m *managerImpl) getSSHClientOptions(authSecret map[string][]byte) ([]clien
 				}
 			}
 		}
+	} else {
+		logger.Info("SSH host key verification is disabled, provide known_hosts in auth secret to enable verification")
+		auth.HostKeyCallback = gossh.InsecureIgnoreHostKey()
 	}
 
 	return []client.Option{client.WithSSHAuth(auth)}, tempFilePath, nil

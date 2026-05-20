@@ -1,6 +1,7 @@
 package git
 
 import (
+	"context"
 	"testing"
 
 	"github.com/go-git/go-git/v6/plumbing/transport"
@@ -20,7 +21,7 @@ JtdGRlLmNzYgECAw==
 func TestGetClientOptions_HTTPToken(t *testing.T) {
 	m := &managerImpl{}
 	secret := map[string][]byte{"token": []byte("my-token")}
-	opts, tmpFile, err := m.getClientOptions("https", secret)
+	opts, tmpFile, err := m.getClientOptions(context.Background(), "https", secret)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -35,7 +36,7 @@ func TestGetClientOptions_HTTPToken(t *testing.T) {
 func TestGetClientOptions_HTTPUsernamePassword(t *testing.T) {
 	m := &managerImpl{}
 	secret := map[string][]byte{"username": []byte("user"), "password": []byte("pass")}
-	opts, _, err := m.getClientOptions("http", secret)
+	opts, _, err := m.getClientOptions(context.Background(), "http", secret)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -46,7 +47,7 @@ func TestGetClientOptions_HTTPUsernamePassword(t *testing.T) {
 
 func TestGetClientOptions_HTTPEmpty(t *testing.T) {
 	m := &managerImpl{}
-	opts, _, err := m.getClientOptions("https", nil)
+	opts, _, err := m.getClientOptions(context.Background(), "https", nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -57,7 +58,7 @@ func TestGetClientOptions_HTTPEmpty(t *testing.T) {
 
 func TestGetClientOptions_SSHNoSecret(t *testing.T) {
 	m := &managerImpl{}
-	opts, _, err := m.getClientOptions(sshScheme, nil)
+	opts, _, err := m.getClientOptions(context.Background(), sshScheme, nil)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -68,7 +69,7 @@ func TestGetClientOptions_SSHNoSecret(t *testing.T) {
 
 func TestGetClientOptions_SSHEmptySecret(t *testing.T) {
 	m := &managerImpl{}
-	opts, _, err := m.getClientOptions(sshScheme, map[string][]byte{})
+	opts, _, err := m.getClientOptions(context.Background(), sshScheme, map[string][]byte{})
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -80,7 +81,7 @@ func TestGetClientOptions_SSHEmptySecret(t *testing.T) {
 func TestGetClientOptions_SSHWithPrivateKey(t *testing.T) {
 	m := &managerImpl{}
 	secret := map[string][]byte{"sshPrivateKey": []byte(testEd25519PrivateKey)}
-	opts, _, err := m.getClientOptions(sshScheme, secret)
+	opts, _, err := m.getClientOptions(context.Background(), sshScheme, secret)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -92,7 +93,7 @@ func TestGetClientOptions_SSHWithPrivateKey(t *testing.T) {
 func TestGetClientOptions_SSHWithInvalidKey(t *testing.T) {
 	m := &managerImpl{}
 	secret := map[string][]byte{"sshPrivateKey": []byte("not-a-valid-key")}
-	_, _, err := m.getClientOptions(sshScheme, secret)
+	_, _, err := m.getClientOptions(context.Background(), sshScheme, secret)
 	if err == nil {
 		t.Fatal("expected error for invalid SSH key, got nil")
 	}

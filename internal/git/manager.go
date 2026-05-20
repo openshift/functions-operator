@@ -54,10 +54,15 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 		return nil, fmt.Errorf("failed to create temporary directory: %w", err)
 	}
 
-	clientOpts, err := m.getClientOptions(parsedURL.Scheme, auth)
+	clientOpts, tempFile, err := m.getClientOptions(parsedURL.Scheme, auth)
 	if err != nil {
 		return nil, fmt.Errorf("failed to configure auth: %w", err)
 	}
+	defer func() {
+		if err != nil && tempFile != "" {
+			_ = os.Remove(tempFile)
+		}
+	}()
 
 	repo, err := git.PlainCloneContext(ctx, targetDir, &git.CloneOptions{
 		URL:           repoUrl,
@@ -76,18 +81,20 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 	}
 
 	return &Repository{
-		CloneDir: targetDir,
-		SubPath:  subPath,
-		Commit:   head.Hash().String(),
-		Branch:   reference,
+		CloneDir:      targetDir,
+		SubPath:       subPath,
+		Commit:        head.Hash().String(),
+		Branch:        reference,
+		knownHostFile: tempFile,
 	}, nil
 }
 
-func (m *managerImpl) getClientOptions(scheme string, authSecret map[string][]byte) ([]client.Option, error) {
+func (m *managerImpl) getClientOptions(scheme string, authSecret map[string][]byte) ([]client.Option, string, error) {
 	if scheme == "ssh" {
 		return m.getSSHClientOptions(authSecret)
 	}
-	return m.getHTTPClientOptions(authSecret), nil
+	opts := m.getHTTPClientOptions(authSecret)
+	return opts, "", nil
 }
 
 func (m *managerImpl) getHTTPClientOptions(authSecret map[string][]byte) []client.Option {
@@ -130,7 +137,7 @@ func ensureKnownHostsExists() error {
 	return nil
 }
 
-func (m *managerImpl) getSSHClientOptions(authSecret map[string][]byte) ([]client.Option, error) {
+func (m *managerImpl) getSSHClientOptions(authSecret map[string][]byte) ([]client.Option, string, error) {
 	privateKey, hasKey := authSecret["sshPrivateKey"]
 	if !hasKey {
 		return []client.Option{
@@ -138,23 +145,24 @@ func (m *managerImpl) getSSHClientOptions(authSecret map[string][]byte) ([]clien
 				User:                  "git",
 				HostKeyCallbackHelper: gitssh.HostKeyCallbackHelper{HostKeyCallback: gossh.InsecureIgnoreHostKey()},
 			}),
-		}, nil
+		}, "", nil
 	}
 
 	password := string(authSecret["sshPrivateKeyPassword"])
 	auth, err := gitssh.NewPublicKeys("git", privateKey, password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse SSH private key: %w", err)
+		return nil, "", fmt.Errorf("failed to parse SSH private key: %w", err)
 	}
 	auth.HostKeyCallback = gossh.InsecureIgnoreHostKey()
 
+	var tempFilePath string
 	if knownHostsData, ok := authSecret["known_hosts"]; ok {
 		tmpFile, err := os.CreateTemp("", "known_hosts-*")
 		if err == nil {
-			defer os.Remove(tmpFile.Name())
 			if _, err := tmpFile.Write(knownHostsData); err == nil {
 				_ = tmpFile.Close()
-				cb, err := gitssh.NewKnownHostsCallback(tmpFile.Name())
+				tempFilePath = tmpFile.Name()
+				cb, err := gitssh.NewKnownHostsCallback(tempFilePath)
 				if err == nil {
 					auth.HostKeyCallback = cb
 				}
@@ -162,5 +170,5 @@ func (m *managerImpl) getSSHClientOptions(authSecret map[string][]byte) ([]clien
 		}
 	}
 
-	return []client.Option{client.WithSSHAuth(auth)}, nil
+	return []client.Option{client.WithSSHAuth(auth)}, tempFilePath, nil
 }

@@ -6,10 +6,11 @@ import (
 )
 
 type Repository struct {
-	CloneDir string
-	SubPath  string
-	Commit   string
-	Branch   string
+	CloneDir      string
+	SubPath       string
+	Commit        string
+	Branch        string
+	knownHostFile string
 }
 
 func (r *Repository) Path() string {
@@ -17,5 +18,8 @@ func (r *Repository) Path() string {
 }
 
 func (r *Repository) Cleanup() error {
+	if r.knownHostFile != "" {
+		_ = os.Remove(r.knownHostFile)
+	}
 	return os.RemoveAll(r.CloneDir)
 }

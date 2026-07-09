@@ -6,7 +6,7 @@ require (
 	code.gitea.io/sdk/gitea v0.25.1
 	github.com/go-git/go-git/v6 v6.0.0-alpha.4
 	github.com/go-logr/logr v1.4.3
-	github.com/onsi/ginkgo/v2 v2.31.0
+	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.0
 	github.com/prometheus/client_golang v1.23.2
 	github.com/stretchr/testify v1.11.1

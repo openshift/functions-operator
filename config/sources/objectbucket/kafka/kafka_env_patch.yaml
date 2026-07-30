@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: manager
+spec:
+  template:
+    spec:
+      containers:
+      - name: manager
+        env:
+        - name: NOTIFICATIONS_MODE
+          value: "kafka"
+        - name: KAFKA_BROKERS
+          value: "my-cluster-kafka-bootstrap.kafka.svc:9095"
+        - name: KAFKA_SECRET
+          value: "objectbucket-notifications-adapter-user"
+        - name: KAFKA_NOTIFICATIONS_TOPIC
+          value: "mcg-adapter-notifications,rgw-adapter-notifications"
+        - name: KAFKA_NOTIFICATIONS_GROUP_ID
+          value: "objectbucket-notifications-adapter"

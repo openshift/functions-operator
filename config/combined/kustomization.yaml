@@ -1,0 +1,11 @@
+# Combined overlay that deploys both func-operator and objectbucket-notifications-adapter
+# in a single namespace. Used for generating a combined OLM bundle.
+namespace: func-operator-system
+
+resources:
+# Shared CRDs (included once to avoid duplicates)
+- ../crd
+# func-operator components
+- func-operator
+# objectbucket-notifications-adapter components
+- source-objectbucket

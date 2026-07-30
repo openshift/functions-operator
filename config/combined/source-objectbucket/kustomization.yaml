@@ -1,0 +1,12 @@
+namePrefix: objectbucket-notifications-adapter-
+
+resources:
+- ../../sources/objectbucket/rbac
+- manager.yaml
+- service.yaml
+- metrics_service.yaml
+
+patches:
+- path: manager_metrics_patch.yaml
+  target:
+    kind: Deployment

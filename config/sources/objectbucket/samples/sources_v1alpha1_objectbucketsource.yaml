@@ -1,0 +1,14 @@
+apiVersion: sources.functions.dev/v1alpha1
+kind: ObjectBucketSource
+metadata:
+  labels:
+    app.kubernetes.io/name: objectbucket-notifications-adapter
+    app.kubernetes.io/managed-by: kustomize
+  name: objectbucketsource-sample
+spec:
+  objectBucketClaim:
+    name: foo-bucket
+  events:
+  - "s3:ObjectCreated:*"
+  sink:
+    uri: http://foo.default.svc.cluster.local

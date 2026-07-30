@@ -1,0 +1,14 @@
+# These resources constitute the fully configured set of manifests
+# used to generate the combined 'manifests/' directory in a bundle.
+namespace: func-operator-system
+
+resources:
+- bases/func-operator.clusterserviceversion.yaml
+# Shared CRDs (included once to avoid duplicates)
+- ../../crd
+# func-operator components
+- ../func-operator
+# objectbucket-notifications-adapter components
+- ../source-objectbucket
+- ../../sources/objectbucket/samples
+- ../../scorecard

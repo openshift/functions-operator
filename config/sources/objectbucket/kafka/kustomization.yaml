@@ -1,0 +1,7 @@
+resources:
+- ../default
+
+patches:
+- path: kafka_env_patch.yaml
+  target:
+    kind: Deployment

@@ -33,6 +33,7 @@ BUNDLE_METADATA_OPTS ?= $(BUNDLE_CHANNELS) $(BUNDLE_DEFAULT_CHANNEL)
 # For example, running 'make bundle-build bundle-push catalog-build catalog-push' will build and push both
 # functions.dev/func-operator-bundle:$VERSION and functions.dev/func-operator-catalog:$VERSION.
 IMAGE_TAG_BASE ?= localhost:5001/func-operator
+IMAGE_TAG_BASE_SOURCE_OBJECTBUCKET ?= localhost:5001/objectbucket-notifications-adapter
 
 DEBUG_IMAGE_TAG_BASE ?= $(IMAGE_TAG_BASE)-debug
 
@@ -56,6 +57,7 @@ endif
 OPERATOR_SDK_VERSION ?= v1.41.1
 # Image URL to use all building/pushing image targets
 IMG ?= $(IMAGE_TAG_BASE):$(VERSION)
+IMG_SOURCE_OBJECTBUCKET ?= $(IMAGE_TAG_BASE_SOURCE_OBJECTBUCKET):$(VERSION)
 DEBUG_IMG ?= $(DEBUG_IMAGE_TAG_BASE):v$(VERSION)
 
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
@@ -116,7 +118,7 @@ vet: ## Run go vet against code.
 
 .PHONY: test
 test: manifests generate fmt vet setup-envtest ## Run tests.
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v /e2e) -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v e2e) -coverprofile cover.out
 
 .PHONY: test-e2e ## Run e2e tests.
 test-e2e: ginkgo
@@ -145,12 +147,23 @@ lint-config: golangci-lint ## Verify golangci-lint linter configuration
 ##@ Build
 
 .PHONY: build
-build: manifests generate fmt vet ## Build manager binary.
-	go build -o bin/manager cmd/main.go
+build: manifests generate fmt vet ## Build func-operator manager binary.
+	go build -o bin/manager cmd/func-operator/main.go
+
+.PHONY: build-source-objectbucket
+build-source-objectbucket: manifests generate fmt vet ## Build objectbucket-notifications-adapter binary.
+	go build -o bin/source-objectbucket cmd/objectbucket-notifications-adapter/main.go
+
+.PHONY: build-sources
+build-sources: build-source-objectbucket ## Build all event source binaries.
 
 .PHONY: run
-run: manifests generate fmt vet ## Run a controller from your host.
-	go run ./cmd/main.go
+run: manifests generate fmt vet ## Run the func-operator controller from your host.
+	go run ./cmd/func-operator/main.go
+
+.PHONY: run-source-objectbucket
+run-source-objectbucket: manifests generate fmt vet ## Run the objectbucket-notifications-adapter controller from your host.
+	go run ./cmd/objectbucket-notifications-adapter/main.go
 
 # If you wish to build the manager image targeting other platforms you can use the --platform flag.
 # (i.e. docker build --platform linux/arm64). However, you must enable docker buildKit for it.
@@ -178,6 +191,20 @@ docker-push-debugger: ## Push debugger docker image with the manager.
 # - be able to push the image to your registry (i.e. if you do not set a valid value via IMG=<myregistry/image:<tag>> then the export will fail)
 # To adequately provide solutions that are compatible with multiple platforms, you should consider using this option.
 PLATFORMS ?= linux/arm64,linux/amd64,linux/s390x,linux/ppc64le
+.PHONY: docker-build-source-objectbucket
+docker-build-source-objectbucket: ## Build docker image for the objectbucket-notifications-adapter.
+	$(CONTAINER_TOOL) build -t ${IMG_SOURCE_OBJECTBUCKET} -f Dockerfile.source-objectbucket .
+
+.PHONY: docker-push-source-objectbucket
+docker-push-source-objectbucket: ## Push docker image for the objectbucket-notifications-adapter.
+	$(CONTAINER_TOOL) push ${IMG_SOURCE_OBJECTBUCKET}
+
+.PHONY: docker-build-sources
+docker-build-sources: docker-build-source-objectbucket ## Build docker images for all event sources.
+
+.PHONY: docker-push-sources
+docker-push-sources: docker-push-source-objectbucket ## Push docker images for all event sources.
+
 .PHONY: docker-buildx
 docker-buildx: ## Build and push docker image for the manager for cross-platform support
 	# copy existing Dockerfile and insert --platform=${BUILDPLATFORM} into Dockerfile.cross, and preserve the original Dockerfile
@@ -239,10 +266,29 @@ patch-registry-cert: ## Patch deployment to mount local registry certificate (fo
 	fi
 
 .PHONY: deploy
-deploy: manifests kustomize ## Deploy controller to the K8s cluster specified in ~/.kube/config.
+deploy: manifests kustomize ## Deploy func-operator controller to the K8s cluster specified in ~/.kube/config.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
 	$(KUSTOMIZE) build config/default | $(KUBECTL) apply -f -
 	$(MAKE) patch-registry-cert
+	$(KUBECTL) wait deployment --all --timeout=120s --for=condition=Available -n func-operator-system
+
+.PHONY: deploy-source-objectbucket
+deploy-source-objectbucket: manifests kustomize ## Deploy objectbucket-notifications-adapter to the K8s cluster.
+	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image controller=${IMG_SOURCE_OBJECTBUCKET}
+	$(KUSTOMIZE) build config/sources/objectbucket/default | $(KUBECTL) apply -f -
+	$(KUBECTL) wait deployment --all --timeout=120s --for=condition=Available -n objectbucket-notifications-adapter-system
+
+.PHONY: deploy-source-objectbucket-kafka
+deploy-source-objectbucket-kafka: manifests kustomize ## Deploy objectbucket-notifications-adapter in Kafka mode.
+	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image controller=${IMG_SOURCE_OBJECTBUCKET}
+	$(KUSTOMIZE) build config/sources/objectbucket/kafka | $(KUBECTL) apply -f -
+	$(KUBECTL) wait deployment --all --timeout=120s --for=condition=Available -n objectbucket-notifications-adapter-system
+
+.PHONY: deploy-combined
+deploy-combined: manifests kustomize ## Deploy both func-operator and all event sources in a single namespace.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
+	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image controller=${IMG_SOURCE_OBJECTBUCKET}
+	$(KUSTOMIZE) build config/combined | $(KUBECTL) apply -f -
 	$(KUBECTL) wait deployment --all --timeout=120s --for=condition=Available -n func-operator-system
 
 .PHONY: deploy-debugger
@@ -253,8 +299,16 @@ deploy-debugger: manifests kustomize ## Deploy debug controller to the K8s clust
 	$(MAKE) patch-registry-cert
 
 .PHONY: undeploy
-undeploy: kustomize ## Undeploy controller from the K8s cluster specified in ~/.kube/config. Call with ignore-not-found=true to ignore resource not found errors during deletion.
+undeploy: kustomize ## Undeploy func-operator controller from the K8s cluster. Call with ignore-not-found=true to ignore resource not found errors during deletion.
 	$(KUSTOMIZE) build config/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+
+.PHONY: undeploy-source-objectbucket
+undeploy-source-objectbucket: kustomize ## Undeploy objectbucket-notifications-adapter from the K8s cluster.
+	$(KUSTOMIZE) build config/sources/objectbucket/default | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
+
+.PHONY: undeploy-combined
+undeploy-combined: kustomize ## Undeploy both func-operator and all event sources from the K8s cluster.
+	$(KUSTOMIZE) build config/combined | $(KUBECTL) delete --ignore-not-found=$(ignore-not-found) -f -
 
 .PHONY: create-kind-cluster
 create-kind-cluster:
@@ -380,6 +434,13 @@ bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metada
 	$(OPERATOR_SDK) generate kustomize manifests -q
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
 	$(KUSTOMIZE) build config/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
+	$(OPERATOR_SDK) bundle validate ./bundle
+
+.PHONY: bundle-combined
+bundle-combined: manifests kustomize operator-sdk ## Generate combined OLM bundle with both func-operator and all event sources.
+	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
+	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image controller=$(IMG_SOURCE_OBJECTBUCKET)
+	$(KUSTOMIZE) build config/combined/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
 	$(OPERATOR_SDK) bundle validate ./bundle
 
 .PHONY: bundle-build

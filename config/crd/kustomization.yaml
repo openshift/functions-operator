@@ -3,6 +3,7 @@
 # It should be run by config/default
 resources:
 - bases/functions.dev_functions.yaml
+- bases/sources.functions.dev_objectbucketsources.yaml
 # +kubebuilder:scaffold:crdkustomizeresource
 
 patches:

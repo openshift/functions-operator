@@ -1,0 +1,49 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: manager-role
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - objectbucket.io
+  resources:
+  - objectbucketclaims
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - sources.functions.dev
+  resources:
+  - objectbucketsources
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - sources.functions.dev
+  resources:
+  - objectbucketsources/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - sources.functions.dev
+  resources:
+  - objectbucketsources/status
+  verbs:
+  - get
+  - patch
+  - update

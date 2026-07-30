@@ -19,4 +19,13 @@ resources:
   kind: Function
   path: github.com/functions-dev/func-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: functions.dev
+  group: sources
+  kind: ObjectBucketSource
+  path: github.com/functions-dev/func-operator/api/sources/v1alpha1
+  version: v1alpha1
 version: "3"

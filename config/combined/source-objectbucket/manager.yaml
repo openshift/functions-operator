@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: manager
+  namespace: system
+  labels:
+    control-plane: manager
+    app.kubernetes.io/name: objectbucket-notifications-adapter
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  selector:
+    matchLabels:
+      control-plane: manager
+      app.kubernetes.io/name: objectbucket-notifications-adapter
+  replicas: 1
+  template:
+    metadata:
+      annotations:
+        kubectl.kubernetes.io/default-container: manager
+      labels:
+        control-plane: manager
+        app.kubernetes.io/name: objectbucket-notifications-adapter
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - command:
+        - /manager
+        args:
+          - --leader-elect
+          - --health-probe-bind-address=:8081
+        image: controller:latest
+        name: manager
+        env:
+        - name: NOOBAA_ADAPTER_ID
+          value: "mcg-adapter"
+        - name: NOOBAA_ADAPTER_TOPIC_ARN
+          value: "mcg-adapter-connection/connect.json"
+        - name: NOOBAA_ADAPTER_STORAGECLASS_PATTERN
+          value: ".*noobaa\\.io$"
+        - name: RADOSGW_ADAPTER_ID
+          value: "rgw-adapter"
+        - name: RADOSGW_ADAPTER_TOPIC_ARN
+          value: "arn:aws:sns:ocs-storagecluster-cephobjectstore::rgw-adapter-notifications"
+        - name: RADOSGW_ADAPTER_STORAGECLASS_PATTERN
+          value: ".*ceph-rgw$"
+        - name: ADAPTER_PORT
+          value: "8888"
+        - name: NOTIFICATIONS_MODE
+          value: "http"
+        ports:
+        - containerPort: 8888
+          name: notifications
+          protocol: TCP
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - "ALL"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        volumeMounts: []
+      volumes: []
+      serviceAccountName: manager
+      terminationGracePeriodSeconds: 10

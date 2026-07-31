@@ -5,4 +5,4 @@
 rm -rf .github
 git add -A
 # only commit if there are staged changes (no-op if .github/ was already absent)
-git diff --cached --quiet || git commit -m "UPSTREAM: <carry>: Remove .github directory (Actions disabled in OpenShift org)"
+git diff --cached --quiet || git commit -m "UPSTREAM: <drop>: Remove .github directory (Actions disabled in OpenShift org)"

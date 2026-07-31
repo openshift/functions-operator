@@ -129,7 +129,20 @@ func ensureKnownHostsExists() error {
 	}
 	sshDir := filepath.Join(home, ".ssh")
 	if err := os.MkdirAll(sshDir, 0700); err != nil {
-		return err
+		// Home directory is not writable (e.g. nonroot distroless container
+		// where HOME=/). Fall back to a temp directory and point HOME there
+		// so go-git's SSH transport can find known_hosts.
+		tmpHome, tmpErr := os.MkdirTemp("", "func-operator-home-*")
+		if tmpErr != nil {
+			return fmt.Errorf("home dir not writable (%w) and failed to create temp home: %w", err, tmpErr)
+		}
+		sshDir = filepath.Join(tmpHome, ".ssh")
+		if mkErr := os.MkdirAll(sshDir, 0700); mkErr != nil {
+			return fmt.Errorf("failed to create .ssh in temp home: %w", mkErr)
+		}
+		if setErr := os.Setenv("HOME", tmpHome); setErr != nil {
+			return fmt.Errorf("failed to set HOME to temp dir: %w", setErr)
+		}
 	}
 	knownHostsPath := filepath.Join(sshDir, "known_hosts")
 	if _, err := os.Stat(knownHostsPath); os.IsNotExist(err) {

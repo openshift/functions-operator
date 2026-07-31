@@ -12,7 +12,8 @@ metadata:
       == "main" && ("Dockerfile.source-objectbucket".pathChanged()
       || "api/sources/***".pathChanged()
       || "cmd/objectbucket-notifications-adapter/***".pathChanged()
-      || "internal/***".pathChanged())
+      || "internal/***".pathChanged()
+      || ".tekton/functions-operator-sources-objectbucket-*".pathChanged())
   labels:
     appstudio.openshift.io/application: serverless-functions
     appstudio.openshift.io/component: functions-operator-sources-objectbucket

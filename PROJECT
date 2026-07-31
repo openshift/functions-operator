@@ -8,7 +8,7 @@ layout:
 plugins:
   manifests.sdk.operatorframework.io/v2: {}
   scorecard.sdk.operatorframework.io/v2: {}
-projectName: func-operator
+projectName: serverless-functions
 repo: github.com/functions-dev/func-operator
 resources:
 - api:

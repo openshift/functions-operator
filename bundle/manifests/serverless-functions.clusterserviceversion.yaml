@@ -402,7 +402,7 @@ spec:
                   value: "8888"
                 - name: NOTIFICATIONS_MODE
                   value: http
-                image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:5925a1308a2b60692c86d1112eb3a7b21232724cd79f9fc8c7cd10d560cf1dd9
+                image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:74b67a0bf437094fad9b773c8a94b37972ef23db2c55155721057ff4e0ac66d0
                 livenessProbe:
                   httpGet:
                     path: /healthz

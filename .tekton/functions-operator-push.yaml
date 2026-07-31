@@ -11,7 +11,9 @@ metadata:
       == "main" && ("Dockerfile".pathChanged()
       || "api/***".pathChanged()
       || "cmd/func-operator/***".pathChanged()
-      || "internal/***".pathChanged())
+      || "internal/***".pathChanged()
+      || ".tekton/functions-operator-push.yaml".pathChanged()
+      || ".tekton/functions-operator-pull-request.yaml".pathChanged())
   labels:
     appstudio.openshift.io/application: serverless-functions
     appstudio.openshift.io/component: functions-operator

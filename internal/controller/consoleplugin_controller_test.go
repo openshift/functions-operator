@@ -21,6 +21,7 @@ import (
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,7 +31,11 @@ import (
 )
 
 var _ = Describe("ConsolePlugin Controller", func() {
-	const operatorNamespace = "test-consoleplugin-ns"
+	const (
+		operatorNamespace = "test-consoleplugin-ns"
+		testImage         = "quay.io/test/faas-console-plugin:latest"
+		testAPIServerURL  = "https://api.test-cluster.example.com:6443"
+	)
 
 	var (
 		reconciler *ConsolePluginReconciler
@@ -49,8 +54,22 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		}
 
 		reconciler = &ConsolePluginReconciler{
-			Client:            k8sClient,
-			OperatorNamespace: operatorNamespace,
+			Client:             k8sClient,
+			OperatorNamespace:  operatorNamespace,
+			ConsolePluginImage: testImage,
+		}
+
+		// Create Infrastructure CR for API server URL
+		infra := &unstructured.Unstructured{}
+		infra.SetAPIVersion(infrastructureAPIVersion)
+		infra.SetKind(infrastructureKind)
+		infra.SetName(infrastructureName)
+		infra.Object["status"] = map[string]interface{}{
+			"apiServerURL": testAPIServerURL,
+		}
+		err = k8sClient.Create(ctx, infra)
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
 		}
 	})
 
@@ -69,6 +88,21 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		cp.SetKind(consolePluginKind)
 		cp.SetName(consolePluginName)
 		_ = k8sClient.Delete(ctx, cp)
+
+		deploy := &appsv1.Deployment{}
+		if k8sClient.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: operatorNamespace}, deploy) == nil {
+			_ = k8sClient.Delete(ctx, deploy)
+		}
+
+		svc := &v1.Service{}
+		if k8sClient.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: operatorNamespace}, svc) == nil {
+			_ = k8sClient.Delete(ctx, svc)
+		}
+
+		sa := &v1.ServiceAccount{}
+		if k8sClient.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: operatorNamespace}, sa) == nil {
+			_ = k8sClient.Delete(ctx, sa)
+		}
 	})
 
 	createConfigMap := func(data map[string]string) {
@@ -88,6 +122,30 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		cp.SetKind(consolePluginKind)
 		err := k8sClient.Get(ctx, types.NamespacedName{Name: consolePluginName}, cp)
 		return cp, err
+	}
+
+	getDeployment := func() (*appsv1.Deployment, error) {
+		deploy := &appsv1.Deployment{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: operatorNamespace}, deploy)
+		return deploy, err
+	}
+
+	getService := func() (*v1.Service, error) {
+		svc := &v1.Service{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: operatorNamespace}, svc)
+		return svc, err
+	}
+
+	getServiceAccount := func() (*v1.ServiceAccount, error) {
+		sa := &v1.ServiceAccount{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: operatorNamespace}, sa)
+		return sa, err
+	}
+
+	doReconcile := func() (reconcile.Result, error) {
+		return reconciler.Reconcile(ctx, reconcile.Request{
+			NamespacedName: types.NamespacedName{Name: consolePluginName},
+		})
 	}
 
 	Context("isConsolePluginEnabled", func() {
@@ -124,6 +182,14 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		})
 	})
 
+	Context("getAPIServerURL", func() {
+		It("should return the API server URL from Infrastructure CR", func() {
+			url, err := reconciler.getAPIServerURL(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(url).To(Equal(testAPIServerURL))
+		})
+	})
+
 	Context("buildConsolePlugin", func() {
 		It("should build a ConsolePlugin with correct structure", func() {
 			cp := reconciler.buildConsolePlugin()
@@ -150,30 +216,72 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		})
 	})
 
+	Context("buildDeployment", func() {
+		It("should build a Deployment with the correct image and args", func() {
+			deploy := reconciler.buildDeployment(testAPIServerURL)
+			Expect(deploy.Name).To(Equal(consolePluginName))
+			Expect(deploy.Namespace).To(Equal(operatorNamespace))
+			Expect(*deploy.Spec.Replicas).To(Equal(int32(2)))
+
+			container := deploy.Spec.Template.Spec.Containers[0]
+			Expect(container.Name).To(Equal(consolePluginName))
+			Expect(container.Image).To(Equal(testImage))
+			Expect(container.Args).To(ContainElement("--https-port=9443"))
+			Expect(container.Args).To(ContainElement("--external-api-server-url=" + testAPIServerURL))
+
+			Expect(deploy.Spec.Template.Spec.ServiceAccountName).To(Equal(consolePluginName))
+			Expect(deploy.Spec.Template.Spec.Volumes[0].Secret.SecretName).To(Equal(consolePluginCertSecret))
+		})
+	})
+
+	Context("buildService", func() {
+		It("should build a Service with serving-cert annotation", func() {
+			svc := reconciler.buildService()
+			Expect(svc.Name).To(Equal(consolePluginName))
+			Expect(svc.Namespace).To(Equal(operatorNamespace))
+			Expect(svc.Annotations["service.alpha.openshift.io/serving-cert-secret-name"]).To(Equal(consolePluginCertSecret))
+			Expect(svc.Spec.Ports[0].Port).To(Equal(consolePluginPortInt32))
+			Expect(svc.Spec.Type).To(Equal(v1.ServiceTypeClusterIP))
+		})
+	})
+
+	Context("buildServiceAccount", func() {
+		It("should build a ServiceAccount with correct labels", func() {
+			sa := reconciler.buildServiceAccount()
+			Expect(sa.Name).To(Equal(consolePluginName))
+			Expect(sa.Namespace).To(Equal(operatorNamespace))
+			Expect(sa.Labels["app.kubernetes.io/managed-by"]).To(Equal("func-operator"))
+		})
+	})
+
 	Context("Reconcile", func() {
-		It("should create ConsolePlugin when enabled", func() {
+		It("should create all resources when enabled", func() {
 			createConfigMap(map[string]string{consolePluginConfigKey: "true"})
 
-			result, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: consolePluginName},
-			})
+			result, err := doReconcile()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(reconcile.Result{}))
 
-			cp, err := getConsolePlugin()
+			_, err = getConsolePlugin()
 			Expect(err).NotTo(HaveOccurred())
-			Expect(cp.GetName()).To(Equal(consolePluginName))
+
+			deploy, err := getDeployment()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deploy.Spec.Template.Spec.Containers[0].Image).To(Equal(testImage))
+			Expect(deploy.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--external-api-server-url=" + testAPIServerURL))
+
+			svc, err := getService()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(svc.Annotations["service.alpha.openshift.io/serving-cert-secret-name"]).To(Equal(consolePluginCertSecret))
+
+			_, err = getServiceAccount()
+			Expect(err).NotTo(HaveOccurred())
 		})
 
-		It("should delete ConsolePlugin when disabled", func() {
+		It("should delete all resources when disabled", func() {
 			createConfigMap(map[string]string{consolePluginConfigKey: "true"})
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: consolePluginName},
-			})
-			Expect(err).NotTo(HaveOccurred())
-
-			_, err = getConsolePlugin()
+			_, err := doReconcile()
 			Expect(err).NotTo(HaveOccurred())
 
 			cm := &v1.ConfigMap{}
@@ -184,53 +292,59 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			cm.Data[consolePluginConfigKey] = "false"
 			Expect(k8sClient.Update(ctx, cm)).To(Succeed())
 
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: consolePluginName},
-			})
+			_, err = doReconcile()
 			Expect(err).NotTo(HaveOccurred())
 
 			_, err = getConsolePlugin()
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+			_, err = getDeployment()
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+			_, err = getService()
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+			_, err = getServiceAccount()
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 
-		It("should not error when deleting non-existent ConsolePlugin", func() {
+		It("should not error when deleting non-existent resources", func() {
 			createConfigMap(map[string]string{consolePluginConfigKey: "false"})
 
-			result, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: consolePluginName},
-			})
+			result, err := doReconcile()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(reconcile.Result{}))
 		})
 
-		It("should update existing ConsolePlugin when reconciled again", func() {
+		It("should update existing resources when reconciled again", func() {
 			createConfigMap(map[string]string{consolePluginConfigKey: "true"})
 
-			_, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: consolePluginName},
-			})
+			_, err := doReconcile()
 			Expect(err).NotTo(HaveOccurred())
 
-			_, err = reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: consolePluginName},
-			})
+			_, err = doReconcile()
 			Expect(err).NotTo(HaveOccurred())
 
 			cp, err := getConsolePlugin()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(cp.GetName()).To(Equal(consolePluginName))
+
+			deploy, err := getDeployment()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deploy.Spec.Template.Spec.Containers[0].Image).To(Equal(testImage))
 		})
 
-		It("should not create ConsolePlugin when key is absent", func() {
+		It("should not create resources when key is absent", func() {
 			createConfigMap(map[string]string{"autoUpdateMiddleware": "true"})
 
-			result, err := reconciler.Reconcile(ctx, reconcile.Request{
-				NamespacedName: types.NamespacedName{Name: consolePluginName},
-			})
+			result, err := doReconcile()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(result).To(Equal(reconcile.Result{}))
 
 			_, err = getConsolePlugin()
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+			_, err = getDeployment()
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 	})

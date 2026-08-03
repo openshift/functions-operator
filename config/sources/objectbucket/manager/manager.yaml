@@ -40,7 +40,7 @@ spec:
         args:
           - --leader-elect
           - --health-probe-bind-address=:8081
-        image: controller:latest
+        image: source-objectbucket-adapter:latest
         name: manager
         env:
         - name: NOOBAA_ADAPTER_ID

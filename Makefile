@@ -274,20 +274,20 @@ deploy: manifests kustomize ## Deploy func-operator controller to the K8s cluste
 
 .PHONY: deploy-source-objectbucket
 deploy-source-objectbucket: manifests kustomize ## Deploy objectbucket-notifications-adapter to the K8s cluster.
-	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image controller=${IMG_SOURCE_OBJECTBUCKET}
+	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image source-objectbucket-adapter=${IMG_SOURCE_OBJECTBUCKET}
 	$(KUSTOMIZE) build config/sources/objectbucket/default | $(KUBECTL) apply -f -
 	$(KUBECTL) wait deployment --all --timeout=120s --for=condition=Available -n objectbucket-notifications-adapter-system
 
 .PHONY: deploy-source-objectbucket-kafka
 deploy-source-objectbucket-kafka: manifests kustomize ## Deploy objectbucket-notifications-adapter in Kafka mode.
-	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image controller=${IMG_SOURCE_OBJECTBUCKET}
+	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image source-objectbucket-adapter=${IMG_SOURCE_OBJECTBUCKET}
 	$(KUSTOMIZE) build config/sources/objectbucket/kafka | $(KUBECTL) apply -f -
 	$(KUBECTL) wait deployment --all --timeout=120s --for=condition=Available -n objectbucket-notifications-adapter-system
 
 .PHONY: deploy-combined
 deploy-combined: manifests kustomize ## Deploy both func-operator and all event sources in a single namespace.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=${IMG}
-	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image controller=${IMG_SOURCE_OBJECTBUCKET}
+	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image source-objectbucket-adapter=${IMG_SOURCE_OBJECTBUCKET}
 	$(KUSTOMIZE) build config/combined | $(KUBECTL) apply -f -
 	$(KUBECTL) wait deployment --all --timeout=120s --for=condition=Available -n func-operator-system
 
@@ -439,7 +439,8 @@ bundle: manifests kustomize operator-sdk ## Generate bundle manifests and metada
 .PHONY: bundle-combined
 bundle-combined: manifests kustomize operator-sdk ## Generate combined OLM bundle with both func-operator and all event sources.
 	cd config/manager && $(KUSTOMIZE) edit set image controller=$(IMG)
-	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image controller=$(IMG_SOURCE_OBJECTBUCKET)
+	cd config/sources/objectbucket/manager && $(KUSTOMIZE) edit set image source-objectbucket-adapter=$(IMG_SOURCE_OBJECTBUCKET)
+	cd config/combined/source-objectbucket && $(KUSTOMIZE) edit set image source-objectbucket-adapter=$(IMG_SOURCE_OBJECTBUCKET)
 	$(KUSTOMIZE) build config/combined/manifests | $(OPERATOR_SDK) generate bundle $(BUNDLE_GEN_FLAGS)
 	$(OPERATOR_SDK) bundle validate ./bundle
 

@@ -1,6 +1,7 @@
 apiVersion: v1
 data:
   autoUpdateMiddleware: "true"
+  consolePluginEnabled: "true"
 kind: ConfigMap
 metadata:
   labels:

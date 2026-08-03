@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: faas-console-plugin
+  namespace: system
+  labels:
+    app: faas-console-plugin
+    app.kubernetes.io/name: faas-console-plugin
+    app.kubernetes.io/part-of: faas-console-plugin
+    app.kubernetes.io/managed-by: kustomize
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: faas-console-plugin
+      app.kubernetes.io/name: faas-console-plugin
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 25%
+      maxSurge: 25%
+  template:
+    metadata:
+      labels:
+        app: faas-console-plugin
+        app.kubernetes.io/name: faas-console-plugin
+        app.kubernetes.io/part-of: faas-console-plugin
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+      - name: faas-console-plugin
+        image: faas-console-plugin:latest
+        ports:
+        - containerPort: 9443
+          protocol: TCP
+        args:
+        - "--https-port=9443"
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: 10m
+            memory: 50Mi
+        volumeMounts:
+        - name: faas-console-plugin-cert
+          readOnly: true
+          mountPath: /var/cert
+      volumes:
+      - name: faas-console-plugin-cert
+        secret:
+          secretName: faas-console-plugin-cert
+          defaultMode: 420
+      restartPolicy: Always
+      dnsPolicy: ClusterFirst
+      serviceAccountName: faas-console-plugin

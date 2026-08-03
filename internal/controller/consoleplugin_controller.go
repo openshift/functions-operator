@@ -41,7 +41,7 @@ import (
 )
 
 const (
-	consolePluginName       = "faas-console-plugin"
+	consolePluginName       = "console-functions-plugin"
 	consolePluginConfigKey  = "consolePluginEnabled"
 	consolePluginPort       = int64(9443)
 	consolePluginPortInt32  = int32(9443)

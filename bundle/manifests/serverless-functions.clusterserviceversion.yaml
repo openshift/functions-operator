@@ -2,6 +2,7 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   annotations:
+    console.openshift.io/plugins: '["console-functions-plugin"]'
     alm-examples: |-
       [
         {
@@ -29,7 +30,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-08-03T14:45:01Z"
+    createdAt: "2026-08-03T16:34:48Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.2+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: serverless-functions.v0.0.1

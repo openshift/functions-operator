@@ -1,0 +1,3 @@
+resources:
+- consoleplugin_clusterrole.yaml
+- consoleplugin_clusterrolebinding.yaml

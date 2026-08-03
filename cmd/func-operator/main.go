@@ -366,8 +366,9 @@ func main() {
 		os.Exit(1)
 	}
 	if err := (&controller.ConsolePluginReconciler{
-		Client:            mgr.GetClient(),
-		OperatorNamespace: operatorNamespace,
+		Client:             mgr.GetClient(),
+		OperatorNamespace:  operatorNamespace,
+		ConsolePluginImage: os.Getenv("CONSOLE_PLUGIN_IMAGE"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ConsolePlugin")
 		os.Exit(1)

@@ -12,9 +12,9 @@ usage() {
     cat <<EOF
 Usage: $(basename "$0") [OPTIONS]
 
-Generate the OpenShift bundle (with faas-console-plugin) for the functions operator.
-Equivalent to "make bundle-combined CHANNELS=tech-preview-v2" but adds the
-faas-console-plugin deployment to the bundle.
+Generate the OpenShift bundle for the functions operator.
+Equivalent to "make bundle-combined CHANNELS=tech-preview-v2" but adds
+faas-console-plugin support (image env var, RBAC, configmap flag).
 
 By default, images are read from the existing ${CSV_FILE} (if present).
 
@@ -54,6 +54,29 @@ extract_image_from_csv() {
         | .spec.template.spec.containers[]
         | select(.name == \"${container_name}\")
         | .image
+    " "${CSV_FILE}" 2>/dev/null) || return 1
+
+    if [[ -n "${image}" && "${image}" != "null" ]]; then
+        echo "${image}"
+        return 0
+    fi
+    return 1
+}
+
+extract_console_plugin_image_from_csv() {
+    if [[ ! -f "${CSV_FILE}" ]]; then
+        return 1
+    fi
+
+    local image
+    image=$(yq eval "
+        .spec.install.spec.deployments[]
+        | select(.name == \"func-operator-controller-manager\")
+        | .spec.template.spec.containers[]
+        | select(.name == \"manager\")
+        | .env[]
+        | select(.name == \"CONSOLE_PLUGIN_IMAGE\")
+        | .value
     " "${CSV_FILE}" 2>/dev/null) || return 1
 
     if [[ -n "${image}" && "${image}" != "null" ]]; then
@@ -132,7 +155,7 @@ if [[ -z "${OBJECTBUCKETSOURCE_ADAPTER_IMAGE}" ]]; then
 fi
 
 if [[ -z "${CONSOLE_PLUGIN_IMAGE}" ]]; then
-    CONSOLE_PLUGIN_IMAGE=$(extract_image_from_csv "faas-console-plugin" "faas-console-plugin") || true
+    CONSOLE_PLUGIN_IMAGE=$(extract_console_plugin_image_from_csv) || true
     if [[ -z "${CONSOLE_PLUGIN_IMAGE}" ]]; then
         echo "Warning: faas-console-plugin image not found in existing CSV, --console-plugin-image is required" >&2
         exit 1
@@ -158,24 +181,23 @@ cd "${REPO_ROOT}"
 cd config/combined/source-objectbucket && ${KUSTOMIZE} edit set image "source-objectbucket-adapter=${OBJECTBUCKETSOURCE_ADAPTER_IMAGE}"
 cd "${REPO_ROOT}"
 
-cd config/openshift/console-plugin && ${KUSTOMIZE} edit set image "faas-console-plugin=${CONSOLE_PLUGIN_IMAGE}"
-cd "${REPO_ROOT}"
+# Set the console plugin image in the manager patch files (both copies)
+MANAGER_PATCH="config/openshift/manager_patch.yaml"
+MANIFESTS_MANAGER_PATCH="config/openshift/manifests/manager_patch.yaml"
+
+yq eval -i "
+  (.spec.template.spec.containers[] | select(.name == \"manager\") | .env[] | select(.name == \"CONSOLE_PLUGIN_IMAGE\") | .value) = \"${CONSOLE_PLUGIN_IMAGE}\"
+" "${MANAGER_PATCH}"
+
+yq eval -i "
+  (.spec.template.spec.containers[] | select(.name == \"manager\") | .env[] | select(.name == \"CONSOLE_PLUGIN_IMAGE\") | .value) = \"${CONSOLE_PLUGIN_IMAGE}\"
+" "${MANIFESTS_MANAGER_PATCH}"
 
 # Generate the bundle
 ${KUSTOMIZE} build config/openshift/manifests | ${OPERATOR_SDK} generate bundle \
     -q --overwrite \
     --version "${VERSION}" \
     --channels "${CHANNELS}"
-
-# Remove ConsolePlugin from the bundle (OLM does not support it; the operator creates it at runtime)
-rm -f bundle/manifests/faas-console-plugin_console.openshift.io_v1_consoleplugin.yaml
-
-# Add empty permissions entry for faas-console-plugin so OLM creates the ServiceAccount.
-# operator-sdk omits it because there are no RBAC roles for the console plugin, but without
-# a permissions entry OLM will not create the SA and the deployment pods won't start.
-yq eval -i '
-  .spec.install.spec.permissions += [{"rules": [], "serviceAccountName": "faas-console-plugin"}]
-' "${CSV_FILE}"
 
 # Validate the bundle
 ${OPERATOR_SDK} bundle validate ./bundle

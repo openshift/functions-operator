@@ -10,9 +10,7 @@ resources:
 - ../../combined/func-operator
 # objectbucket-notifications-adapter components
 - ../../combined/source-objectbucket
-# OpenShift console plugin
-- ../console-plugin
-# RBAC for ConsolePlugin management
+# RBAC for ConsolePlugin and Infrastructure CR management
 - ../rbac
 - ../../sources/objectbucket/samples
 - ../../scorecard
@@ -23,3 +21,8 @@ patches:
   target:
     kind: ConfigMap
     name: func-operator-controller-config
+# Add CONSOLE_PLUGIN_IMAGE env var to the func-operator deployment
+- path: manager_patch.yaml
+  target:
+    kind: Deployment
+    name: func-operator-controller-manager

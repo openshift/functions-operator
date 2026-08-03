@@ -1,0 +1,53 @@
+apiVersion: operators.coreos.com/v1alpha1
+kind: ClusterServiceVersion
+metadata:
+  annotations:
+    alm-examples: '[]'
+    capabilities: Basic Install
+  name: func-operator.v0.0.0
+  namespace: placeholder
+spec:
+  apiservicedefinitions: {}
+  customresourcedefinitions:
+    owned:
+    - description: Function is the Schema for the functions API.
+      displayName: Function
+      kind: Function
+      name: functions.functions.dev
+      version: v1alpha1
+    - description: ObjectBucketSource is the Schema for the objectbucketsources API.
+      displayName: ObjectBucketSource
+      kind: ObjectBucketSource
+      name: objectbucketsources.sources.functions.dev
+      version: v1alpha1
+  description: Operator for serverless functions and event sources
+  displayName: Functions Operator
+  icon:
+  - base64data: ""
+    mediatype: ""
+  install:
+    spec:
+      deployments: null
+    strategy: ""
+  installModes:
+  - supported: true
+    type: OwnNamespace
+  - supported: true
+    type: SingleNamespace
+  - supported: true
+    type: MultiNamespace
+  - supported: true
+    type: AllNamespaces
+  keywords:
+  - faas
+  - eventing
+  links:
+  - name: Func Operator
+    url: https://func-operator.domain
+  maintainers:
+  - email: email@example.com
+    name: creydr
+  maturity: alpha
+  provider:
+    name: knative
+  version: 0.0.0

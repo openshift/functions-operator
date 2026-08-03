@@ -29,10 +29,10 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-07-31T13:25:14Z"
+    createdAt: "2026-08-03T13:16:49Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.2+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
-  name: serverless-functions.v0.0.1-4f02f7b-20260731152513
+  name: serverless-functions.v0.0.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -53,6 +53,18 @@ spec:
     spec:
       clusterPermissions:
       - rules:
+        - apiGroups:
+          - console.openshift.io
+          resources:
+          - consoleplugins
+          verbs:
+          - get
+          - list
+          - watch
+          - create
+          - update
+          - patch
+          - delete
         - apiGroups:
           - ""
           resources:
@@ -281,6 +293,64 @@ spec:
         serviceAccountName: objectbucket-notifications-adapter-manager
       deployments:
       - label:
+          app: faas-console-plugin
+          app.kubernetes.io/managed-by: kustomize
+          app.kubernetes.io/name: faas-console-plugin
+          app.kubernetes.io/part-of: faas-console-plugin
+        name: faas-console-plugin
+        spec:
+          replicas: 2
+          selector:
+            matchLabels:
+              app: faas-console-plugin
+              app.kubernetes.io/name: faas-console-plugin
+          strategy:
+            rollingUpdate:
+              maxSurge: 25%
+              maxUnavailable: 25%
+            type: RollingUpdate
+          template:
+            metadata:
+              labels:
+                app: faas-console-plugin
+                app.kubernetes.io/name: faas-console-plugin
+                app.kubernetes.io/part-of: faas-console-plugin
+            spec:
+              containers:
+              - args:
+                - --https-port=9443
+                image: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:517b53f29ad3e2936aaf67edadbc03aa3a9f144238ca09c32e37c12ab494512d
+                imagePullPolicy: IfNotPresent
+                name: faas-console-plugin
+                ports:
+                - containerPort: 9443
+                  protocol: TCP
+                resources:
+                  requests:
+                    cpu: 10m
+                    memory: 50Mi
+                securityContext:
+                  allowPrivilegeEscalation: false
+                  capabilities:
+                    drop:
+                    - ALL
+                volumeMounts:
+                - mountPath: /var/cert
+                  name: faas-console-plugin-cert
+                  readOnly: true
+              dnsPolicy: ClusterFirst
+              restartPolicy: Always
+              securityContext:
+                runAsNonRoot: true
+                seccompProfile:
+                  type: RuntimeDefault
+              serviceAccountName: faas-console-plugin
+              volumes:
+              - name: faas-console-plugin-cert
+                secret:
+                  defaultMode: 420
+                  secretName: faas-console-plugin-cert
+      - label:
           app.kubernetes.io/managed-by: kustomize
           app.kubernetes.io/name: func-operator
           control-plane: controller-manager
@@ -402,7 +472,7 @@ spec:
                   value: "8888"
                 - name: NOTIFICATIONS_MODE
                   value: http
-                image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:74b67a0bf437094fad9b773c8a94b37972ef23db2c55155721057ff4e0ac66d0
+                image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:08bc22a4abb346c0a52d30865b9581828bd63674bb23bc800a24d17a09854c21
                 livenessProbe:
                   httpGet:
                     path: /healthz
@@ -527,4 +597,4 @@ spec:
   provider:
     name: Provider Name
     url: https://your.domain
-  version: 0.0.1-4f02f7b-20260731152513
+  version: 0.0.1

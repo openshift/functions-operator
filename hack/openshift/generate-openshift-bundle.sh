@@ -170,6 +170,13 @@ ${KUSTOMIZE} build config/openshift/manifests | ${OPERATOR_SDK} generate bundle 
 # Remove ConsolePlugin from the bundle (OLM does not support it; the operator creates it at runtime)
 rm -f bundle/manifests/faas-console-plugin_console.openshift.io_v1_consoleplugin.yaml
 
+# Add empty permissions entry for faas-console-plugin so OLM creates the ServiceAccount.
+# operator-sdk omits it because there are no RBAC roles for the console plugin, but without
+# a permissions entry OLM will not create the SA and the deployment pods won't start.
+yq eval -i '
+  .spec.install.spec.permissions += [{"rules": [], "serviceAccountName": "faas-console-plugin"}]
+' "${CSV_FILE}"
+
 # Validate the bundle
 ${OPERATOR_SDK} bundle validate ./bundle
 

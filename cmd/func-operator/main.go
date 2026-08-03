@@ -365,6 +365,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "Function")
 		os.Exit(1)
 	}
+	if err := (&controller.ConsolePluginReconciler{
+		Client:            mgr.GetClient(),
+		OperatorNamespace: operatorNamespace,
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ConsolePlugin")
+		os.Exit(1)
+	}
 	// +kubebuilder:scaffold:builder
 
 	if err := addCertWatchers(mgr, metricsCertWatcher, webhookCertWatcher); err != nil {

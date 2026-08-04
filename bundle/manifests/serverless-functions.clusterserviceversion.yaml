@@ -352,7 +352,7 @@ spec:
                   valueFrom:
                     fieldRef:
                       fieldPath: metadata.namespace
-                image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:77666f3c8b4cc320610c5539342b67bb2115948cd270bcd9ae87bc833255023d
+                image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:5170bb415a72098c81d06059d55e7046ef347268368a9a2d8ff700a7f6192e74
                 imagePullPolicy: Always
                 livenessProbe:
                   httpGet:

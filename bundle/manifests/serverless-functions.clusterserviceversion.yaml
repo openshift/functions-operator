@@ -30,7 +30,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-08-04T07:53:22Z"
+    createdAt: "2026-08-04T08:36:21Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.2+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
   name: serverless-functions.v0.0.1
@@ -362,6 +362,10 @@ spec:
                 env:
                 - name: CONSOLE_PLUGIN_IMAGE
                   value: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:dd65ce01a4733589ab9cd7ec3d50ff0665a3971fc55e94e0ac3d7094792a543d
+                - name: POD_NAME
+                  valueFrom:
+                    fieldRef:
+                      fieldPath: metadata.name
                 - name: WATCH_NAMESPACE
                   valueFrom:
                     fieldRef:

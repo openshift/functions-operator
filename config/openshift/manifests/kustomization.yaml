@@ -1,0 +1,28 @@
+# These resources constitute the fully configured set of manifests
+# used to generate the OpenShift 'manifests/' directory in a bundle.
+namespace: func-operator-system
+
+resources:
+- bases/func-operator.clusterserviceversion.yaml
+# Shared CRDs (included once to avoid duplicates)
+- ../../crd
+# func-operator components
+- ../../combined/func-operator
+# objectbucket-notifications-adapter components
+- ../../combined/source-objectbucket
+# RBAC for ConsolePlugin and Infrastructure CR management
+- ../rbac
+- ../../sources/objectbucket/samples
+- ../../scorecard
+
+patches:
+# Add consolePluginEnabled to the controller-config ConfigMap
+- path: configmap_patch.yaml
+  target:
+    kind: ConfigMap
+    name: func-operator-controller-config
+# Add CONSOLE_PLUGIN_IMAGE env var to the func-operator deployment
+- path: manager_patch.yaml
+  target:
+    kind: Deployment
+    name: func-operator-controller-manager

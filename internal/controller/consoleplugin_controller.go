@@ -23,12 +23,13 @@ import (
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
-	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -61,12 +62,23 @@ const (
 // operator's controller-config ConfigMap.
 type ConsolePluginReconciler struct {
 	client.Client
+	DirectReader       client.Reader
 	OperatorNamespace  string
 	ConsolePluginImage string
+	PodName            string
+
+	ownerInfoResolved  bool
+	deploymentOwnerRef *metav1.OwnerReference
+	clusterOwnerRef    *metav1.OwnerReference
 }
 
 func (r *ConsolePluginReconciler) Reconcile(ctx context.Context, _ ctrl.Request) (ctrl.Result, error) {
 	logger := log.FromContext(ctx)
+
+	if err := r.resolveOLMOwnership(ctx); err != nil {
+		logger.Error(err, "Failed to resolve OLM ownership")
+		return ctrl.Result{}, err
+	}
 
 	enabled, err := r.isConsolePluginEnabled(ctx)
 	if err != nil {
@@ -152,15 +164,158 @@ func (r *ConsolePluginReconciler) getAPIServerURL(ctx context.Context) (string, 
 
 	status, ok := infra.Object["status"].(map[string]interface{})
 	if !ok {
-		return "", fmt.Errorf("Infrastructure CR has no status")
+		return "", fmt.Errorf("infrastructure CR has no status")
 	}
 
 	apiServerURL, ok := status["apiServerURL"].(string)
 	if !ok || apiServerURL == "" {
-		return "", fmt.Errorf("Infrastructure CR has no apiServerURL in status")
+		return "", fmt.Errorf("infrastructure CR has no apiServerURL in status")
 	}
 
 	return apiServerURL, nil
+}
+
+func (r *ConsolePluginReconciler) resolveOLMOwnership(ctx context.Context) error {
+	if r.ownerInfoResolved {
+		return nil
+	}
+
+	logger := log.FromContext(ctx)
+
+	if r.PodName == "" || r.DirectReader == nil {
+		logger.Info("POD_NAME not set, skipping OLM ownership resolution")
+		r.ownerInfoResolved = true
+		return nil
+	}
+
+	pod := &v1.Pod{}
+	if err := r.DirectReader.Get(ctx, types.NamespacedName{
+		Name: r.PodName, Namespace: r.OperatorNamespace,
+	}, pod); err != nil {
+		return fmt.Errorf("failed to get controller pod: %w", err)
+	}
+
+	deploy, err := r.resolveOwnerDeployment(ctx, pod)
+	if err != nil {
+		return err
+	}
+	if deploy == nil {
+		r.ownerInfoResolved = true
+		return nil
+	}
+
+	if deploy.Labels["olm.managed"] != "true" {
+		logger.Info("Controller deployment is not OLM-managed, skipping OLM ownership resolution")
+		r.ownerInfoResolved = true
+		return nil
+	}
+
+	olmOwner, ok := deploy.Labels["olm.owner"]
+	if !ok || olmOwner == "" {
+		return fmt.Errorf("OLM-managed deployment has no olm.owner label")
+	}
+
+	r.deploymentOwnerRef = &metav1.OwnerReference{
+		APIVersion: "apps/v1",
+		Kind:       "Deployment",
+		Name:       deploy.Name,
+		UID:        deploy.UID,
+	}
+
+	crb, err := r.findOLMClusterRoleBinding(ctx, olmOwner, pod.Spec.ServiceAccountName)
+	if err != nil {
+		return err
+	}
+
+	r.clusterOwnerRef = &metav1.OwnerReference{
+		APIVersion: "rbac.authorization.k8s.io/v1",
+		Kind:       "ClusterRoleBinding",
+		Name:       crb.Name,
+		UID:        crb.UID,
+	}
+	logger.Info("Resolved OLM ownership",
+		"deployment", deploy.Name,
+		"clusterRoleBinding", crb.Name)
+	r.ownerInfoResolved = true
+	return nil
+}
+
+func (r *ConsolePluginReconciler) resolveOwnerDeployment(ctx context.Context, pod *v1.Pod) (*appsv1.Deployment, error) {
+	logger := log.FromContext(ctx)
+
+	rsRef := findOwnerRef(pod.OwnerReferences, "ReplicaSet")
+	if rsRef == nil {
+		logger.Info("Controller pod has no ReplicaSet owner, skipping OLM ownership resolution")
+		return nil, nil
+	}
+
+	rs := &appsv1.ReplicaSet{}
+	if err := r.DirectReader.Get(ctx, types.NamespacedName{
+		Name: rsRef.Name, Namespace: r.OperatorNamespace,
+	}, rs); err != nil {
+		return nil, fmt.Errorf("failed to get owner ReplicaSet: %w", err)
+	}
+
+	deployRef := findOwnerRef(rs.OwnerReferences, "Deployment")
+	if deployRef == nil {
+		logger.Info("ReplicaSet has no Deployment owner, skipping OLM ownership resolution")
+		return nil, nil
+	}
+
+	deploy := &appsv1.Deployment{}
+	if err := r.DirectReader.Get(ctx, types.NamespacedName{
+		Name: deployRef.Name, Namespace: r.OperatorNamespace,
+	}, deploy); err != nil {
+		return nil, fmt.Errorf("failed to get owner Deployment: %w", err)
+	}
+
+	return deploy, nil
+}
+
+func (r *ConsolePluginReconciler) findOLMClusterRoleBinding(ctx context.Context, olmOwner, saName string) (*rbacv1.ClusterRoleBinding, error) {
+	crbList := &rbacv1.ClusterRoleBindingList{}
+	if err := r.DirectReader.List(ctx, crbList,
+		client.MatchingLabels{"olm.owner": olmOwner}); err != nil {
+		return nil, fmt.Errorf("failed to list ClusterRoleBindings: %w", err)
+	}
+
+	for i := range crbList.Items {
+		crb := &crbList.Items[i]
+		for _, subject := range crb.Subjects {
+			if subject.Kind == "ServiceAccount" &&
+				subject.Name == saName &&
+				subject.Namespace == r.OperatorNamespace {
+				return crb, nil
+			}
+		}
+	}
+
+	return nil, fmt.Errorf("no ClusterRoleBinding found with olm.owner=%s and SA %s/%s as subject",
+		olmOwner, r.OperatorNamespace, saName)
+}
+
+func findOwnerRef(refs []metav1.OwnerReference, kind string) *metav1.OwnerReference {
+	for i := range refs {
+		if refs[i].Kind == kind {
+			return &refs[i]
+		}
+	}
+	return nil
+}
+
+func ensureOwnerRef(obj metav1.Object, ref *metav1.OwnerReference) {
+	if ref == nil {
+		return
+	}
+	existing := obj.GetOwnerReferences()
+	for i, r := range existing {
+		if r.UID == ref.UID {
+			existing[i] = *ref
+			obj.SetOwnerReferences(existing)
+			return
+		}
+	}
+	obj.SetOwnerReferences(append(existing, *ref))
 }
 
 func consolePluginLabels() map[string]string {
@@ -342,6 +497,7 @@ func (r *ConsolePluginReconciler) buildConsolePlugin() *unstructured.Unstructure
 func (r *ConsolePluginReconciler) ensureServiceAccount(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 	desired := r.buildServiceAccount()
+	ensureOwnerRef(desired, r.deploymentOwnerRef)
 
 	existing := &v1.ServiceAccount{}
 	err := r.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: r.OperatorNamespace}, existing)
@@ -354,6 +510,7 @@ func (r *ConsolePluginReconciler) ensureServiceAccount(ctx context.Context) erro
 	}
 
 	existing.Labels = desired.Labels
+	ensureOwnerRef(existing, r.deploymentOwnerRef)
 	logger.Info("Updating ServiceAccount", "name", consolePluginName)
 	return r.Update(ctx, existing)
 }
@@ -361,6 +518,7 @@ func (r *ConsolePluginReconciler) ensureServiceAccount(ctx context.Context) erro
 func (r *ConsolePluginReconciler) ensureService(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 	desired := r.buildService()
+	ensureOwnerRef(desired, r.deploymentOwnerRef)
 
 	existing := &v1.Service{}
 	err := r.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: r.OperatorNamespace}, existing)
@@ -377,6 +535,7 @@ func (r *ConsolePluginReconciler) ensureService(ctx context.Context) error {
 	existing.Spec.Ports = desired.Spec.Ports
 	existing.Spec.Selector = desired.Spec.Selector
 	existing.Spec.Type = desired.Spec.Type
+	ensureOwnerRef(existing, r.deploymentOwnerRef)
 	logger.Info("Updating Service", "name", consolePluginName)
 	return r.Update(ctx, existing)
 }
@@ -384,6 +543,7 @@ func (r *ConsolePluginReconciler) ensureService(ctx context.Context) error {
 func (r *ConsolePluginReconciler) ensureDeployment(ctx context.Context, apiServerURL string) error {
 	logger := log.FromContext(ctx)
 	desired := r.buildDeployment(apiServerURL)
+	ensureOwnerRef(desired, r.deploymentOwnerRef)
 
 	existing := &appsv1.Deployment{}
 	err := r.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: r.OperatorNamespace}, existing)
@@ -397,6 +557,7 @@ func (r *ConsolePluginReconciler) ensureDeployment(ctx context.Context, apiServe
 
 	existing.Labels = desired.Labels
 	existing.Spec = desired.Spec
+	ensureOwnerRef(existing, r.deploymentOwnerRef)
 	logger.Info("Updating Deployment", "name", consolePluginName)
 	return r.Update(ctx, existing)
 }
@@ -404,6 +565,7 @@ func (r *ConsolePluginReconciler) ensureDeployment(ctx context.Context, apiServe
 func (r *ConsolePluginReconciler) ensureConsolePlugin(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 	desired := r.buildConsolePlugin()
+	ensureOwnerRef(desired, r.clusterOwnerRef)
 
 	existing := &unstructured.Unstructured{}
 	existing.SetAPIVersion(consolePluginAPIVersion)
@@ -420,6 +582,7 @@ func (r *ConsolePluginReconciler) ensureConsolePlugin(ctx context.Context) error
 
 	existing.Object["spec"] = desired.Object["spec"]
 	existing.SetLabels(desired.GetLabels())
+	ensureOwnerRef(existing, r.clusterOwnerRef)
 	logger.Info("Updating ConsolePlugin", "name", consolePluginName)
 	return r.Update(ctx, existing)
 }

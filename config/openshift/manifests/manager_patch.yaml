@@ -11,3 +11,7 @@ spec:
         env:
         - name: CONSOLE_PLUGIN_IMAGE
           value: "faas-console-plugin:latest"
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name

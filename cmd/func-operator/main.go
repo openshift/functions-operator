@@ -257,10 +257,10 @@ func setupCacheOptions(operatorNamespace string) cache.Options {
 	// without affecting which namespaces Functions are watched in.
 	operatorNsConfig := map[string]cache.Config{operatorNamespace: {}}
 	cacheOpts.ByObject = map[client.Object]cache.ByObject{
-		&v1.ConfigMap{}:       {Namespaces: operatorNsConfig},
-		&appsv1.Deployment{}:  {Namespaces: operatorNsConfig},
-		&v1.Service{}:         {Namespaces: operatorNsConfig},
-		&v1.ServiceAccount{}:  {Namespaces: operatorNsConfig},
+		&v1.ConfigMap{}:      {Namespaces: operatorNsConfig},
+		&appsv1.Deployment{}: {Namespaces: operatorNsConfig},
+		&v1.Service{}:        {Namespaces: operatorNsConfig},
+		&v1.ServiceAccount{}: {Namespaces: operatorNsConfig},
 	}
 
 	return cacheOpts
@@ -369,8 +369,10 @@ func main() {
 	}
 	if err := (&controller.ConsolePluginReconciler{
 		Client:             mgr.GetClient(),
+		DirectReader:       mgr.GetAPIReader(),
 		OperatorNamespace:  operatorNamespace,
 		ConsolePluginImage: os.Getenv("CONSOLE_PLUGIN_IMAGE"),
+		PodName:            os.Getenv("POD_NAME"),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ConsolePlugin")
 		os.Exit(1)

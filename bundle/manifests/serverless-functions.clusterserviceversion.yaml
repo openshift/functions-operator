@@ -361,7 +361,7 @@ spec:
                 - /manager
                 env:
                 - name: CONSOLE_PLUGIN_IMAGE
-                  value: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:43b4c00ac8be3090a4336567b4e7a3a10f3b7f935c85ec0015e1345ba951816b
+                  value: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:dd65ce01a4733589ab9cd7ec3d50ff0665a3971fc55e94e0ac3d7094792a543d
                 - name: WATCH_NAMESPACE
                   valueFrom:
                     fieldRef:

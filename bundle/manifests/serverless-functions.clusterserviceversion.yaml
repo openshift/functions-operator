@@ -29,11 +29,11 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-08-05T12:30:06Z"
+    createdAt: "2026-08-05T14:15:08Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.2+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/plugins: '["console-functions-plugin"]'
-  name: serverless-functions.v0.0.1
+  name: serverless-functions.v2.0.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
@@ -602,7 +602,7 @@ spec:
   maturity: alpha
   provider:
     name: Red Hat
-  version: 0.0.1
+  version: 2.0.1
   relatedImages:
     - name: func-operator
       image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:2935c7e30a35c45f799f18650074b70c2dd75d031396de6dd4cbc397a0d1cc4a

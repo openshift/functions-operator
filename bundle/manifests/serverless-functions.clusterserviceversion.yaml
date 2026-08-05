@@ -2,7 +2,6 @@ apiVersion: operators.coreos.com/v1alpha1
 kind: ClusterServiceVersion
 metadata:
   annotations:
-    console.openshift.io/plugins: '["console-functions-plugin"]'
     alm-examples: |-
       [
         {
@@ -30,556 +29,564 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-08-04T08:36:21Z"
+    createdAt: "2026-08-05T09:47:59Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.2+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
+    console.openshift.io/plugins: '["console-functions-plugin"]'
   name: serverless-functions.v0.0.1
   namespace: placeholder
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:
     owned:
-    - kind: Function
-      name: functions.functions.dev
-      version: v1alpha1
-    - kind: ObjectBucketSource
-      name: objectbucketsources.sources.functions.dev
-      version: v1alpha1
+      - kind: Function
+        name: functions.functions.dev
+        version: v1alpha1
+      - kind: ObjectBucketSource
+        name: objectbucketsources.sources.functions.dev
+        version: v1alpha1
   description: Serverless Functions description. TODO.
   displayName: Serverless Functions
   icon:
-  - base64data: ""
-    mediatype: ""
+    - base64data: ""
+      mediatype: ""
   install:
     spec:
       clusterPermissions:
-      - rules:
-        - apiGroups:
-          - console.openshift.io
-          resources:
-          - consoleplugins
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
-        - apiGroups:
-          - ""
-          resources:
-          - serviceaccounts
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
-        - apiGroups:
-          - ""
-          resources:
-          - pods
-          verbs:
-          - get
-        - apiGroups:
-          - apps
-          resources:
-          - replicasets
-          verbs:
-          - get
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - clusterrolebindings
-          verbs:
-          - list
-        - apiGroups:
-          - config.openshift.io
-          resources:
-          - infrastructures
-          verbs:
-          - get
-        - apiGroups:
-          - ""
-          resources:
-          - configmaps
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - ""
-          resources:
-          - persistentvolumeclaims
-          - pods
-          - pods/attach
-          - secrets
-          - services
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - apps
-          resources:
-          - deployments
-          - replicasets
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - eventing.knative.dev
-          resources:
-          - triggers
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - functions.dev
-          resources:
-          - functions
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - functions.dev
-          resources:
-          - functions/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - functions.dev
-          resources:
-          - functions/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - http.keda.sh
-          resources:
-          - httpscaledobjects
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - objectbucket.io
-          resources:
-          - objectbucketclaims
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - rbac.authorization.k8s.io
-          resources:
-          - rolebindings
-          - roles
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - serving.knative.dev
-          resources:
-          - routes
-          - services
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - sources.functions.dev
-          resources:
-          - objectbucketsources
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - sources.functions.dev
-          resources:
-          - objectbucketsources/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - sources.functions.dev
-          resources:
-          - objectbucketsources/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - tekton.dev
-          resources:
-          - pipelineruns
-          - pipelines
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - tekton.dev
-          resources:
-          - taskruns
-          verbs:
-          - get
-          - list
-          - watch
-        serviceAccountName: func-operator-controller-manager
-      - rules:
-        - apiGroups:
-          - ""
-          resources:
-          - configmaps
-          - secrets
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - objectbucket.io
-          resources:
-          - objectbucketclaims
-          verbs:
-          - get
-          - list
-          - watch
-        - apiGroups:
-          - sources.functions.dev
-          resources:
-          - objectbucketsources
-          verbs:
-          - create
-          - delete
-          - get
-          - list
-          - patch
-          - update
-          - watch
-        - apiGroups:
-          - sources.functions.dev
-          resources:
-          - objectbucketsources/finalizers
-          verbs:
-          - update
-        - apiGroups:
-          - sources.functions.dev
-          resources:
-          - objectbucketsources/status
-          verbs:
-          - get
-          - patch
-          - update
-        - apiGroups:
-          - authentication.k8s.io
-          resources:
-          - tokenreviews
-          verbs:
-          - create
-        - apiGroups:
-          - authorization.k8s.io
-          resources:
-          - subjectaccessreviews
-          verbs:
-          - create
-        serviceAccountName: objectbucket-notifications-adapter-manager
+        - rules:
+            - apiGroups:
+                - console.openshift.io
+              resources:
+                - consoleplugins
+              verbs:
+                - get
+                - list
+                - watch
+                - create
+                - update
+                - patch
+                - delete
+            - apiGroups:
+                - ""
+              resources:
+                - serviceaccounts
+              verbs:
+                - get
+                - list
+                - watch
+                - create
+                - update
+                - patch
+                - delete
+            - apiGroups:
+                - ""
+              resources:
+                - pods
+              verbs:
+                - get
+            - apiGroups:
+                - apps
+              resources:
+                - replicasets
+              verbs:
+                - get
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              resources:
+                - clusterrolebindings
+              verbs:
+                - list
+            - apiGroups:
+                - config.openshift.io
+              resources:
+                - infrastructures
+              verbs:
+                - get
+            - apiGroups:
+                - ""
+              resources:
+                - configmaps
+              verbs:
+                - get
+                - list
+                - watch
+            - apiGroups:
+                - ""
+              resources:
+                - persistentvolumeclaims
+                - pods
+                - pods/attach
+                - secrets
+                - services
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - apps
+              resources:
+                - deployments
+                - replicasets
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - eventing.knative.dev
+              resources:
+                - triggers
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - functions.dev
+              resources:
+                - functions
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - functions.dev
+              resources:
+                - functions/finalizers
+              verbs:
+                - update
+            - apiGroups:
+                - functions.dev
+              resources:
+                - functions/status
+              verbs:
+                - get
+                - patch
+                - update
+            - apiGroups:
+                - http.keda.sh
+              resources:
+                - httpscaledobjects
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - objectbucket.io
+              resources:
+                - objectbucketclaims
+              verbs:
+                - get
+                - list
+                - watch
+            - apiGroups:
+                - rbac.authorization.k8s.io
+              resources:
+                - rolebindings
+                - roles
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - serving.knative.dev
+              resources:
+                - routes
+                - services
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - sources.functions.dev
+              resources:
+                - objectbucketsources
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - sources.functions.dev
+              resources:
+                - objectbucketsources/finalizers
+              verbs:
+                - update
+            - apiGroups:
+                - sources.functions.dev
+              resources:
+                - objectbucketsources/status
+              verbs:
+                - get
+                - patch
+                - update
+            - apiGroups:
+                - tekton.dev
+              resources:
+                - pipelineruns
+                - pipelines
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - tekton.dev
+              resources:
+                - taskruns
+              verbs:
+                - get
+                - list
+                - watch
+          serviceAccountName: func-operator-controller-manager
+        - rules:
+            - apiGroups:
+                - ""
+              resources:
+                - configmaps
+                - secrets
+              verbs:
+                - get
+                - list
+                - watch
+            - apiGroups:
+                - objectbucket.io
+              resources:
+                - objectbucketclaims
+              verbs:
+                - get
+                - list
+                - watch
+            - apiGroups:
+                - sources.functions.dev
+              resources:
+                - objectbucketsources
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - patch
+                - update
+                - watch
+            - apiGroups:
+                - sources.functions.dev
+              resources:
+                - objectbucketsources/finalizers
+              verbs:
+                - update
+            - apiGroups:
+                - sources.functions.dev
+              resources:
+                - objectbucketsources/status
+              verbs:
+                - get
+                - patch
+                - update
+            - apiGroups:
+                - authentication.k8s.io
+              resources:
+                - tokenreviews
+              verbs:
+                - create
+            - apiGroups:
+                - authorization.k8s.io
+              resources:
+                - subjectaccessreviews
+              verbs:
+                - create
+          serviceAccountName: objectbucket-notifications-adapter-manager
       deployments:
-      - label:
-          app.kubernetes.io/managed-by: kustomize
-          app.kubernetes.io/name: func-operator
-          control-plane: controller-manager
-        name: func-operator-controller-manager
-        spec:
-          replicas: 1
-          selector:
-            matchLabels:
-              app.kubernetes.io/name: func-operator
-              control-plane: controller-manager
-          strategy: {}
-          template:
-            metadata:
-              annotations:
-                kubectl.kubernetes.io/default-container: manager
-              labels:
+        - label:
+            app.kubernetes.io/managed-by: kustomize
+            app.kubernetes.io/name: func-operator
+            control-plane: controller-manager
+          name: func-operator-controller-manager
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
                 app.kubernetes.io/name: func-operator
                 control-plane: controller-manager
-            spec:
-              containers:
-              - args:
-                - --leader-elect
-                - --health-probe-bind-address=:8081
-                - --disable-func-cli-update=true
-                - --func-cli-path=/func
-                - --metrics-bind-address=:8080
-                - --metrics-secure=false
-                command:
-                - /manager
-                env:
-                - name: CONSOLE_PLUGIN_IMAGE
-                  value: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:43b4c00ac8be3090a4336567b4e7a3a10f3b7f935c85ec0015e1345ba951816b
-                - name: POD_NAME
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: metadata.name
-                - name: WATCH_NAMESPACE
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: metadata.annotations['olm.targetNamespaces']
-                - name: SYSTEM_NAMESPACE
-                  valueFrom:
-                    fieldRef:
-                      fieldPath: metadata.namespace
-                image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:2935c7e30a35c45f799f18650074b70c2dd75d031396de6dd4cbc397a0d1cc4a
-                imagePullPolicy: Always
-                livenessProbe:
-                  httpGet:
-                    path: /healthz
-                    port: 8081
-                  initialDelaySeconds: 15
-                  periodSeconds: 20
-                name: manager
-                readinessProbe:
-                  httpGet:
-                    path: /readyz
-                    port: 8081
-                  initialDelaySeconds: 5
-                  periodSeconds: 10
-                resources:
-                  limits:
-                    cpu: "2"
-                    memory: 2Gi
-                  requests:
-                    cpu: 100m
-                    memory: 500Mi
+            strategy: {}
+            template:
+              metadata:
+                annotations:
+                  kubectl.kubernetes.io/default-container: manager
+                labels:
+                  app.kubernetes.io/name: func-operator
+                  control-plane: controller-manager
+              spec:
+                containers:
+                  - args:
+                      - --leader-elect
+                      - --health-probe-bind-address=:8081
+                      - --disable-func-cli-update=true
+                      - --func-cli-path=/func
+                      - --metrics-bind-address=:8080
+                      - --metrics-secure=false
+                    command:
+                      - /manager
+                    env:
+                      - name: CONSOLE_PLUGIN_IMAGE
+                        value: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:dd65ce01a4733589ab9cd7ec3d50ff0665a3971fc55e94e0ac3d7094792a543d
+                      - name: POD_NAME
+                        valueFrom:
+                          fieldRef:
+                            fieldPath: metadata.name
+                      - name: WATCH_NAMESPACE
+                        valueFrom:
+                          fieldRef:
+                            fieldPath: metadata.annotations['olm.targetNamespaces']
+                      - name: SYSTEM_NAMESPACE
+                        valueFrom:
+                          fieldRef:
+                            fieldPath: metadata.namespace
+                    image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:2935c7e30a35c45f799f18650074b70c2dd75d031396de6dd4cbc397a0d1cc4a
+                    imagePullPolicy: Always
+                    livenessProbe:
+                      httpGet:
+                        path: /healthz
+                        port: 8081
+                      initialDelaySeconds: 15
+                      periodSeconds: 20
+                    name: manager
+                    readinessProbe:
+                      httpGet:
+                        path: /readyz
+                        port: 8081
+                      initialDelaySeconds: 5
+                      periodSeconds: 10
+                    resources:
+                      limits:
+                        cpu: "2"
+                        memory: 2Gi
+                      requests:
+                        cpu: 100m
+                        memory: 500Mi
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                        drop:
+                          - ALL
+                    volumeMounts:
+                      - mountPath: /git-repos
+                        name: git-repos
                 securityContext:
-                  allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
-                volumeMounts:
-                - mountPath: /git-repos
-                  name: git-repos
-              securityContext:
-                runAsNonRoot: true
-                seccompProfile:
-                  type: RuntimeDefault
-              serviceAccountName: func-operator-controller-manager
-              terminationGracePeriodSeconds: 10
-              volumes:
-              - emptyDir: {}
-                name: git-repos
-      - label:
-          app.kubernetes.io/managed-by: kustomize
-          app.kubernetes.io/name: objectbucket-notifications-adapter
-          control-plane: manager
-        name: objectbucket-notifications-adapter-manager
-        spec:
-          replicas: 1
-          selector:
-            matchLabels:
-              app.kubernetes.io/name: objectbucket-notifications-adapter
-              control-plane: manager
-          strategy: {}
-          template:
-            metadata:
-              annotations:
-                kubectl.kubernetes.io/default-container: manager
-              labels:
+                  runAsNonRoot: true
+                  seccompProfile:
+                    type: RuntimeDefault
+                serviceAccountName: func-operator-controller-manager
+                terminationGracePeriodSeconds: 10
+                volumes:
+                  - emptyDir: {}
+                    name: git-repos
+        - label:
+            app.kubernetes.io/managed-by: kustomize
+            app.kubernetes.io/name: objectbucket-notifications-adapter
+            control-plane: manager
+          name: objectbucket-notifications-adapter-manager
+          spec:
+            replicas: 1
+            selector:
+              matchLabels:
                 app.kubernetes.io/name: objectbucket-notifications-adapter
                 control-plane: manager
-            spec:
-              containers:
-              - args:
-                - --metrics-bind-address=:8443
-                - --leader-elect
-                - --health-probe-bind-address=:8081
-                command:
-                - /manager
-                env:
-                - name: NOOBAA_ADAPTER_ID
-                  value: mcg-adapter
-                - name: NOOBAA_ADAPTER_TOPIC_ARN
-                  value: mcg-adapter-connection/connect.json
-                - name: NOOBAA_ADAPTER_STORAGECLASS_PATTERN
-                  value: .*noobaa\.io$
-                - name: RADOSGW_ADAPTER_ID
-                  value: rgw-adapter
-                - name: RADOSGW_ADAPTER_TOPIC_ARN
-                  value: arn:aws:sns:ocs-storagecluster-cephobjectstore::rgw-adapter-notifications
-                - name: RADOSGW_ADAPTER_STORAGECLASS_PATTERN
-                  value: .*ceph-rgw$
-                - name: ADAPTER_PORT
-                  value: "8888"
-                - name: NOTIFICATIONS_MODE
-                  value: http
-                image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:965c7d722379a9d63188fea8a929f392dfb69a3650cf4c0c1e3aaaddeff6bf6f
-                livenessProbe:
-                  httpGet:
-                    path: /healthz
-                    port: 8081
-                  initialDelaySeconds: 15
-                  periodSeconds: 20
-                name: manager
-                ports:
-                - containerPort: 8888
-                  name: notifications
-                  protocol: TCP
-                readinessProbe:
-                  httpGet:
-                    path: /readyz
-                    port: 8081
-                  initialDelaySeconds: 5
-                  periodSeconds: 10
-                resources:
-                  limits:
-                    cpu: 500m
-                    memory: 128Mi
-                  requests:
-                    cpu: 10m
-                    memory: 64Mi
+            strategy: {}
+            template:
+              metadata:
+                annotations:
+                  kubectl.kubernetes.io/default-container: manager
+                labels:
+                  app.kubernetes.io/name: objectbucket-notifications-adapter
+                  control-plane: manager
+              spec:
+                containers:
+                  - args:
+                      - --metrics-bind-address=:8443
+                      - --leader-elect
+                      - --health-probe-bind-address=:8081
+                    command:
+                      - /manager
+                    env:
+                      - name: NOOBAA_ADAPTER_ID
+                        value: mcg-adapter
+                      - name: NOOBAA_ADAPTER_TOPIC_ARN
+                        value: mcg-adapter-connection/connect.json
+                      - name: NOOBAA_ADAPTER_STORAGECLASS_PATTERN
+                        value: .*noobaa\.io$
+                      - name: RADOSGW_ADAPTER_ID
+                        value: rgw-adapter
+                      - name: RADOSGW_ADAPTER_TOPIC_ARN
+                        value: arn:aws:sns:ocs-storagecluster-cephobjectstore::rgw-adapter-notifications
+                      - name: RADOSGW_ADAPTER_STORAGECLASS_PATTERN
+                        value: .*ceph-rgw$
+                      - name: ADAPTER_PORT
+                        value: "8888"
+                      - name: NOTIFICATIONS_MODE
+                        value: http
+                    image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:965c7d722379a9d63188fea8a929f392dfb69a3650cf4c0c1e3aaaddeff6bf6f
+                    livenessProbe:
+                      httpGet:
+                        path: /healthz
+                        port: 8081
+                      initialDelaySeconds: 15
+                      periodSeconds: 20
+                    name: manager
+                    ports:
+                      - containerPort: 8888
+                        name: notifications
+                        protocol: TCP
+                    readinessProbe:
+                      httpGet:
+                        path: /readyz
+                        port: 8081
+                      initialDelaySeconds: 5
+                      periodSeconds: 10
+                    resources:
+                      limits:
+                        cpu: 500m
+                        memory: 128Mi
+                      requests:
+                        cpu: 10m
+                        memory: 64Mi
+                    securityContext:
+                      allowPrivilegeEscalation: false
+                      capabilities:
+                        drop:
+                          - ALL
                 securityContext:
-                  allowPrivilegeEscalation: false
-                  capabilities:
-                    drop:
-                    - ALL
-              securityContext:
-                runAsNonRoot: true
-                seccompProfile:
-                  type: RuntimeDefault
-              serviceAccountName: objectbucket-notifications-adapter-manager
-              terminationGracePeriodSeconds: 10
+                  runAsNonRoot: true
+                  seccompProfile:
+                    type: RuntimeDefault
+                serviceAccountName: objectbucket-notifications-adapter-manager
+                terminationGracePeriodSeconds: 10
       permissions:
-      - rules:
-        - apiGroups:
-          - ""
-          resources:
-          - configmaps
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
-        - apiGroups:
-          - coordination.k8s.io
-          resources:
-          - leases
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
-        - apiGroups:
-          - ""
-          resources:
-          - events
-          verbs:
-          - create
-          - patch
-        serviceAccountName: func-operator-controller-manager
-      - rules:
-        - apiGroups:
-          - ""
-          resources:
-          - configmaps
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
-        - apiGroups:
-          - coordination.k8s.io
-          resources:
-          - leases
-          verbs:
-          - get
-          - list
-          - watch
-          - create
-          - update
-          - patch
-          - delete
-        - apiGroups:
-          - ""
-          resources:
-          - events
-          verbs:
-          - create
-          - patch
-        serviceAccountName: objectbucket-notifications-adapter-manager
+        - rules:
+            - apiGroups:
+                - ""
+              resources:
+                - configmaps
+              verbs:
+                - get
+                - list
+                - watch
+                - create
+                - update
+                - patch
+                - delete
+            - apiGroups:
+                - coordination.k8s.io
+              resources:
+                - leases
+              verbs:
+                - get
+                - list
+                - watch
+                - create
+                - update
+                - patch
+                - delete
+            - apiGroups:
+                - ""
+              resources:
+                - events
+              verbs:
+                - create
+                - patch
+          serviceAccountName: func-operator-controller-manager
+        - rules:
+            - apiGroups:
+                - ""
+              resources:
+                - configmaps
+              verbs:
+                - get
+                - list
+                - watch
+                - create
+                - update
+                - patch
+                - delete
+            - apiGroups:
+                - coordination.k8s.io
+              resources:
+                - leases
+              verbs:
+                - get
+                - list
+                - watch
+                - create
+                - update
+                - patch
+                - delete
+            - apiGroups:
+                - ""
+              resources:
+                - events
+              verbs:
+                - create
+                - patch
+          serviceAccountName: objectbucket-notifications-adapter-manager
     strategy: deployment
   installModes:
-  - supported: false
-    type: OwnNamespace
-  - supported: false
-    type: SingleNamespace
-  - supported: false
-    type: MultiNamespace
-  - supported: true
-    type: AllNamespaces
+    - supported: false
+      type: OwnNamespace
+    - supported: false
+      type: SingleNamespace
+    - supported: false
+      type: MultiNamespace
+    - supported: true
+      type: AllNamespaces
   keywords:
-  - serverless-functions
+    - serverless-functions
   links:
-  - name: Serverless Functions
-    url: https://serverless-functions.domain
+    - name: Serverless Functions
+      url: https://serverless-functions.domain
   maintainers:
-  - email: your@email.com
-    name: Maintainer Name
+    - email: your@email.com
+      name: Maintainer Name
   maturity: alpha
   provider:
     name: Provider Name
     url: https://your.domain
   version: 0.0.1
+  relatedImages:
+    - name: func-operator
+      image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:2935c7e30a35c45f799f18650074b70c2dd75d031396de6dd4cbc397a0d1cc4a
+    - name: objectbucket-notifications-adapter
+      image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:965c7d722379a9d63188fea8a929f392dfb69a3650cf4c0c1e3aaaddeff6bf6f
+    - name: faas-console-plugin
+      image: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:dd65ce01a4733589ab9cd7ec3d50ff0665a3971fc55e94e0ac3d7094792a543d

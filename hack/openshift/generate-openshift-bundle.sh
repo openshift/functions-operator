@@ -13,7 +13,7 @@ usage() {
 Usage: $(basename "$0") [OPTIONS]
 
 Generate the OpenShift bundle for the functions operator.
-Equivalent to "make bundle-combined CHANNELS=tech-preview-v2" but adds
+Equivalent to "make bundle-combined CHANNELS=candidate-v2" but adds
 faas-console-plugin support (image env var, RBAC, configmap flag).
 
 By default, images are read from the existing ${CSV_FILE} (if present).
@@ -22,8 +22,8 @@ Options:
   --func-operator-image IMAGE              func-operator image
   --objectbucketsource-adapter-image IMAGE objectbucket-notifications-adapter image
   --console-plugin-image IMAGE             faas-console-plugin image
-  --version VERSION                        Bundle version (default: 0.0.1)
-  --channels CHANNELS                      Bundle channels (default: tech-preview-v2)
+  --version VERSION                        Bundle version
+  --channels CHANNELS                      Bundle channels (default: candidate-v2)
   -h, --help                               Show this help message
 
 Examples:
@@ -89,8 +89,8 @@ extract_console_plugin_image_from_csv() {
 FUNC_OPERATOR_IMAGE=""
 OBJECTBUCKETSOURCE_ADAPTER_IMAGE=""
 CONSOLE_PLUGIN_IMAGE=""
-VERSION="0.0.1"
-CHANNELS="tech-preview-v2"
+VERSION="2.0.1"
+CHANNELS="candidate-v2"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in

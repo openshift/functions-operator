@@ -200,8 +200,19 @@ ${KUSTOMIZE} build config/openshift/manifests | ${OPERATOR_SDK} generate bundle 
     --channels "${CHANNELS}"
 
 # Add console plugin annotation so OLM/OpenShift console knows this operator provides a plugin.
-# Use sed instead of yq to avoid yq reformatting the entire file's indentation style.
-sed -i '/^  annotations:/a\    console.openshift.io/plugins: '\''["console-functions-plugin"]'\''' "${CSV_FILE}"
+yq eval -i '
+  .metadata.annotations."console.openshift.io/plugins" = "[\"console-functions-plugin\"]"
+' "${CSV_FILE}"
+
+# Add spec.relatedImages so OLM can mirror all operand images for
+# disconnected installs.
+yq eval -i "
+  .spec.relatedImages = [
+    {\"name\": \"func-operator\", \"image\": \"${FUNC_OPERATOR_IMAGE}\"},
+    {\"name\": \"objectbucket-notifications-adapter\", \"image\": \"${OBJECTBUCKETSOURCE_ADAPTER_IMAGE}\"},
+    {\"name\": \"faas-console-plugin\", \"image\": \"${CONSOLE_PLUGIN_IMAGE}\"}
+  ]
+" "${CSV_FILE}"
 
 # Validate the bundle
 ${OPERATOR_SDK} bundle validate ./bundle

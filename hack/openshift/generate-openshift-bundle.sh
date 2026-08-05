@@ -214,6 +214,42 @@ yq eval -i "
   ]
 " "${CSV_FILE}"
 
+# Patch CSV metadata fields that operator-sdk generate bundle overwrites.
+ICON_BASE64="PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzOCIgaGVpZ2h0PSIzOCIgdmlld0JveD0iMCAwIDM4IDM4Ij48ZGVmcz48c3R5bGU+LmF7ZmlsbDojZmZmO30uYntmaWxsOiNlMDA7fTwvc3R5bGU+PC9kZWZzPjxwYXRoIGNsYXNzPSJhIiBkPSJNMjgsMUgxMGE5LDksMCwwLDAtOSw5VjI4YTksOSwwLDAsMCw5LDlIMjhhOSw5LDAsMCwwLDktOVYxMGE5LDksMCwwLDAtOS05WiIvPjxwYXRoIGQ9Ik0yOCwyLjI1QTcuNzU4Nyw3Ljc1ODcsMCwwLDEsMzUuNzUsMTBWMjhBNy43NTg3LDcuNzU4NywwLDAsMSwyOCwzNS43NUgxMEE3Ljc1ODcsNy43NTg3LDAsMCwxLDIuMjUsMjhWMTBBNy43NTg3LDcuNzU4NywwLDAsMSwxMCwyLjI1SDI4TTI4LDFIMTBhOSw5LDAsMCwwLTksOVYyOGE5LDksMCwwLDAsOSw5SDI4YTksOSwwLDAsMCw5LTlWMTBhOSw5LDAsMCwwLTktOVoiLz48cGF0aCBjbGFzcz0iYiIgZD0iTTE0LDIzLjQ3NjZIMTBhLjYyNTMuNjI1MywwLDAsMS0uNjI1LS42MjV2LTRhLjYyNTIuNjI1MiwwLDAsMSwuNjI1LS42MjVoNGEuNjI1Mi42MjUyLDAsMCwxLC42MjUuNjI1djRBLjYyNTMuNjI1MywwLDAsMSwxNCwyMy40NzY2Wm0tMy4zNzUtMS4yNWgyLjc1di0yLjc1aC0yLjc1WiIvPjxwYXRoIGNsYXNzPSJiIiBkPSJNMjEsMjMuNDc2NkgxN2EuNjI1My42MjUzLDAsMCwxLS42MjUtLjYyNXYtNGEuNjI1Mi42MjUyLDAsMCwxLC42MjUtLjYyNWg0YS42MjUyLjYyNTIsMCwwLDEsLjYyNS42MjV2NEEuNjI1My42MjUzLDAsMCwxLDIxLDIzLjQ3NjZabS0zLjM3NS0xLjI1aDIuNzV2LTIuNzVoLTIuNzVaIi8+PHBhdGggY2xhc3M9ImIiIGQ9Ik0xNy41LDE2LjQ3NjZoLTRhLjYyNTMuNjI1MywwLDAsMS0uNjI1LS42MjV2LTRhLjYyNTIuNjI1MiwwLDAsMSwuNjI1LS42MjVoNGEuNjI1Mi42MjUyLDAsMCwxLC42MjUuNjI1djRBLjYyNTMuNjI1MywwLDAsMSwxNy41LDE2LjQ3NjZabS0zLjM3NS0xLjI1aDIuNzV2LTIuNzVoLTIuNzVaIi8+PHBhdGggY2xhc3M9ImIiIGQ9Ik0yNC41LDE2LjQ3NjZoLTRhLjYyNTMuNjI1MywwLDAsMS0uNjI1LS42MjV2LTRhLjYyNTIuNjI1MiwwLDAsMSwuNjI1LS42MjVoNGEuNjI1Mi42MjUyLDAsMCwxLC42MjUuNjI1djRBLjYyNTMuNjI1MywwLDAsMSwyNC41LDE2LjQ3NjZabS0zLjM3NS0xLjI1aDIuNzV2LTIuNzVoLTIuNzVaIi8+PHBhdGggY2xhc3M9ImIiIGQ9Ik0yOCwyMy40NzY2SDI0YS42MjUzLjYyNTMsMCwwLDEtLjYyNS0uNjI1di00YS42MjUyLjYyNTIsMCwwLDEsLjYyNS0uNjI1aDRhLjYyNTIuNjI1MiwwLDAsMSwuNjI1LjYyNXY0QS42MjUzLjYyNTMsMCwwLDEsMjgsMjMuNDc2NlptLTMuMzc1LTEuMjVoMi43NXYtMi43NWgtMi43NVoiLz48cGF0aCBkPSJNMjksMjYuNDc2Nkg5YS42MjUuNjI1LDAsMCwxLDAtMS4yNUgyOWEuNjI1LjYyNSwwLDAsMSwwLDEuMjVaIi8+PC9zdmc+"
+
+export DESCRIPTION
+read -r -d '' DESCRIPTION <<'DESCEOF' || true
+Serverless Functions Operator provides
+- an operator for managing Serverless Functions runtimes, using the Functions CRD
+- an OpenShift Console plugin to deploy and manage Functions
+- event sources for triggering functions.
+
+# Prerequisites
+- OpenShift Pipelines
+- OpenShift Serverless Operator
+
+# Further Information
+For documentation on OpenShift Serverless, see:
+- [Installation Guide](https://docs.redhat.com/en/documentation/red_hat_openshift_serverless/1.37/html/installing_openshift_serverless/index)
+- [Develop Serverless Applications](https://docs.redhat.com/en/documentation/red_hat_openshift_serverless/1.37/html/serving/getting-started-with-knative-serving#serverless-applications)
+DESCEOF
+
+yq eval -i "
+  .spec.displayName = \"Serverless Functions Operator\" |
+  .spec.icon[0].base64data = \"${ICON_BASE64}\" |
+  .spec.icon[0].mediatype = \"image/svg+xml\" |
+  .spec.keywords = [\"eventing\", \"faas\", \"functions\", \"scale\", \"serverless\", \"serving\", \"zero\"] |
+  .spec.links = [{\"name\": \"Documentation\", \"url\": \"https://docs.redhat.com/en/documentation/red_hat_openshift_serverless/\"}, {\"name\": \"Source Repository\", \"url\": \"https://github.com/openshift/functions-operator\"}] |
+  .spec.maintainers = [{\"email\": \"support@redhat.com\", \"name\": \"Serverless Team\"}] |
+  .spec.provider.name = \"Red Hat\" |
+  del(.spec.provider.url)
+" "${CSV_FILE}"
+
+yq eval -i '
+  .spec.description = strenv(DESCRIPTION) |
+  .spec.description style="literal"
+' "${CSV_FILE}"
+
 # Validate the bundle
 ${OPERATOR_SDK} bundle validate ./bundle
 

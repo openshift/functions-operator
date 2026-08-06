@@ -8,8 +8,8 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "main" && ( "./catalogs/***".pathChanged() || ".tekton/serverless-functions-fbc-422-push.yaml".pathChanged()
-      || "v4.22/Dockerfile.catalog".pathChanged() )
+      == "main" && ( "catalogs/catalog-template-semver.yaml".pathChanged() || ".tekton/serverless-functions-fbc-422-push.yaml".pathChanged()
+      || "catalogs/v4.22/Dockerfile.catalog".pathChanged() )
   labels:
     appstudio.openshift.io/application: serverless-functions-fbc-422
     appstudio.openshift.io/component: serverless-functions-fbc-422

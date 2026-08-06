@@ -220,7 +220,7 @@ spec:
         - "catalogs/catalog-template-semver.yaml"
         - "--migrate-level=bundle-object-to-csv-metadata"
       - name: OPM_OUTPUT_PATH
-        value: "catalogs/v4.22/catalog.json"
+        value: "catalogs/v4.22/catalog/serverless-functions/catalog.json"
       - name: IDMS_PATH
         value: ""
       runAfter:

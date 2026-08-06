@@ -213,9 +213,14 @@ spec:
       - name: ociArtifactExpiresAfter
         value: $(params.image-expires-after)
       - name: OPM_ARGS
-        value: []
+        value:
+        - alpha
+        - render-template
+        - semver
+        - "catalogs/catalog-template-semver.yaml"
+        - "--migrate-level=bundle-object-to-csv-metadata"
       - name: OPM_OUTPUT_PATH
-        value: ""
+        value: "catalogs/v4.22/catalog.json"
       - name: IDMS_PATH
         value: ""
       runAfter:

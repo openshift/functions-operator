@@ -3,7 +3,7 @@ FROM registry.redhat.io/openshift5/ose-operator-registry-rhel9:v5.0
 ENTRYPOINT ["/bin/opm"]
 CMD ["serve", "/configs", "--cache-dir=/tmp/cache"]
 
-COPY catalog/ /configs
+COPY v5.0/catalog/ /configs
 
 RUN ["/bin/opm", "serve", "/configs", "--cache-dir=/tmp/cache", "--cache-only"]
 

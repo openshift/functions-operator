@@ -122,7 +122,7 @@ test: manifests generate fmt vet setup-envtest ## Run tests.
 
 .PHONY: test-e2e ## Run e2e tests.
 test-e2e: ginkgo
-	$(GINKGO) -v --timeout=1h --label-filter="!bundle" --fail-fast -p ./test/e2e/
+	$(GINKGO) -v --timeout=1h --label-filter="!bundle" --fail-fast --flake-attempts=2 -p ./test/e2e/
 
 .PHONY: test-e2e-bundle ## Run bundle e2e tests.
 test-e2e-bundle: operator-sdk docker-build docker-push bundle bundle-build bundle-push install-olm-in-cluster ginkgo

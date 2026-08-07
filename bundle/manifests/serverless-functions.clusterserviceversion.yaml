@@ -29,12 +29,17 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-08-07T06:27:51Z"
+    createdAt: "2026-08-07T10:52:39Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.2+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/plugins: '["console-functions-plugin"]'
   name: serverless-functions.v2.0.1
   namespace: placeholder
+  labels:
+    operatorframework.io/arch.amd64: supported
+    operatorframework.io/arch.ppc64le: supported
+    operatorframework.io/arch.s390x: supported
+    operatorframework.io/arch.arm64: supported
 spec:
   apiservicedefinitions: {}
   customresourcedefinitions:

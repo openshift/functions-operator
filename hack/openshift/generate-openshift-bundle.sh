@@ -204,6 +204,14 @@ yq eval -i '
   .metadata.annotations."console.openshift.io/plugins" = "[\"console-functions-plugin\"]"
 ' "${CSV_FILE}"
 
+# Add multi-arch labels.
+yq eval -i '
+  .metadata.labels."operatorframework.io/arch.amd64" = "supported" |
+  .metadata.labels."operatorframework.io/arch.ppc64le" = "supported" |
+  .metadata.labels."operatorframework.io/arch.s390x" = "supported" |
+  .metadata.labels."operatorframework.io/arch.arm64" = "supported"
+' "${CSV_FILE}"
+
 # Add spec.relatedImages so OLM can mirror all operand images for
 # disconnected installs.
 yq eval -i "

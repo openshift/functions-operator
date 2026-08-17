@@ -28,6 +28,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	sourcesv1alpha1 "github.com/functions-dev/func-operator/api/sources/v1alpha1"
+	"github.com/functions-dev/func-operator/internal/objectbucketsource/config"
 )
 
 var _ = Describe("ObjectBucketSource Controller", func() {
@@ -76,8 +77,9 @@ var _ = Describe("ObjectBucketSource Controller", func() {
 		It("should successfully reconcile the resource", func() {
 			By("Reconciling the created resource")
 			controllerReconciler := &ObjectBucketSourceReconciler{
-				Client: k8sClient,
-				Scheme: k8sClient.Scheme(),
+				Client:         k8sClient,
+				Scheme:         k8sClient.Scheme(),
+				ConfigProvider: config.NewMockProvider(),
 			}
 
 			_, err := controllerReconciler.Reconcile(ctx, reconcile.Request{

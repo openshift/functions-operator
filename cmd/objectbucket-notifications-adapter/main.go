@@ -20,21 +20,16 @@ import (
 	"context"
 	"crypto/tls"
 	"flag"
-	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	"k8s.io/client-go/kubernetes"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/certwatcher"
@@ -44,11 +39,9 @@ import (
 	metricsserver "sigs.k8s.io/controller-runtime/pkg/metrics/server"
 	"sigs.k8s.io/controller-runtime/pkg/webhook"
 
-	"github.com/IBM/sarama"
-
 	sourcesv1alpha1 "github.com/functions-dev/func-operator/api/sources/v1alpha1"
+	"github.com/functions-dev/func-operator/internal/objectbucketsource/config"
 	"github.com/functions-dev/func-operator/internal/objectbucketsource/controller"
-	kafkaconfig "github.com/functions-dev/func-operator/internal/objectbucketsource/kafka"
 	"github.com/functions-dev/func-operator/internal/objectbucketsource/notificationserver"
 	// +kubebuilder:scaffold:imports
 )
@@ -74,7 +67,15 @@ func main() {
 	var probeAddr string
 	var secureMetrics bool
 	var enableHTTP2 bool
+	var configMapName string
+	var createConfig bool
+	var adapterPort int
+	var notificationsMode string
+	var kafkaBrokers string
+	var kafkaNotificationsTopics string
+	var kafkaNotificationsGroupID string
 	var tlsOpts []func(*tls.Config)
+
 	flag.StringVar(&metricsAddr, "metrics-bind-address", "0", "The address the metrics endpoint binds to. "+
 		"Use :8443 for HTTPS or :8080 for HTTP, or leave as 0 to disable the metrics service.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
@@ -92,6 +93,25 @@ func main() {
 	flag.StringVar(&metricsCertKey, "metrics-cert-key", "tls.key", "The name of the metrics server key file.")
 	flag.BoolVar(&enableHTTP2, "enable-http2", false,
 		"If set, HTTP/2 will be enabled for the metrics and webhook servers")
+	flag.StringVar(&configMapName, "config", "objectbucket-notifications-adapter-config",
+		"Name of the ConfigMap containing adapter configuration")
+	flag.BoolVar(&createConfig, "create-config", false,
+		"If set, create the default configuration ConfigMap at startup if it does not already exist.")
+	flag.IntVar(&adapterPort, "adapter-port", 8888,
+		"Port the notification HTTP server listens on (HTTP mode only)")
+	flag.StringVar(&notificationsMode, "notifications-mode", "http",
+		"http or kafka - selects how the adapter receives notifications. "+
+			"Default for the NOTIFICATIONS_MODE ConfigMap key, which can override it at runtime.")
+	flag.StringVar(&kafkaBrokers, "kafka-brokers", "",
+		"Comma-separated list of Kafka broker addresses (required for Kafka mode). "+
+			"Default for the KAFKA_BROKERS ConfigMap key, which can override it at runtime.")
+	flag.StringVar(&kafkaNotificationsTopics, "kafka-notifications-topics", "",
+		"Comma-separated list of Kafka topics to consume notifications from (required for Kafka mode). "+
+			"Default for the KAFKA_NOTIFICATIONS_TOPICS ConfigMap key, which can override it at runtime.")
+	flag.StringVar(&kafkaNotificationsGroupID, "kafka-notifications-group-id", "",
+		"Consumer group ID for consuming notifications (required for Kafka mode). "+
+			"Default for the KAFKA_NOTIFICATIONS_GROUP_ID ConfigMap key, which can override it at runtime.")
+
 	opts := zap.Options{
 		Development: true,
 	}
@@ -178,136 +198,64 @@ func main() {
 		os.Exit(1)
 	}
 
-	noobaaAdapterID := envOrDefault("NOOBAA_ADAPTER_ID", "mcg-adapter")
-	noobaaAdapterTopic := envOrDefault("NOOBAA_ADAPTER_TOPIC_ARN", "mcg-adapter-connection/connect.json")
-	noobaaStorageClassPattern := envOrDefault("NOOBAA_ADAPTER_STORAGECLASS_PATTERN", `.*noobaa\.io$`)
-
-	radosgwAdapterID := envOrDefault("RADOSGW_ADAPTER_ID", "rgw-adapter")
-	radosgwAdapterTopic := envOrDefault("RADOSGW_ADAPTER_TOPIC_ARN",
-		"arn:aws:sns:ocs-storagecluster-cephobjectstore::rgw-adapter-notifications")
-	radosgwStorageClassPattern := envOrDefault("RADOSGW_ADAPTER_STORAGECLASS_PATTERN", `.*ceph-rgw$`)
-
-	adapterConfigs := make([]controller.AdapterConfig, 0, 2)
-	for _, cfg := range []struct {
-		id, topic, pattern string
-	}{
-		{noobaaAdapterID, noobaaAdapterTopic, noobaaStorageClassPattern},
-		{radosgwAdapterID, radosgwAdapterTopic, radosgwStorageClassPattern},
-	} {
-		re, err := regexp.Compile(cfg.pattern)
-		if err != nil {
-			setupLog.Error(err, "invalid storageclass pattern", "pattern", cfg.pattern)
-			os.Exit(1)
-		}
-		adapterConfigs = append(adapterConfigs, controller.AdapterConfig{
-			ID:                  cfg.id,
-			Topic:               cfg.topic,
-			StorageClassPattern: re,
-		})
+	// The command-line flags provide the defaults for the notification settings.
+	// The actual values are resolved from the ConfigMap (falling back to these
+	// defaults) and can be changed at runtime. Validation happens in the config
+	// provider when the ConfigMap is loaded.
+	notificationDefaults := config.NotificationSettings{
+		Mode:                      notificationsMode,
+		KafkaBrokers:              splitAndTrim(kafkaBrokers),
+		KafkaNotificationsTopics:  splitAndTrim(kafkaNotificationsTopics),
+		KafkaNotificationsGroupID: kafkaNotificationsGroupID,
 	}
 
-	adapterPort := 8888
-	if portStr := os.Getenv("ADAPTER_PORT"); portStr != "" {
-		var err error
-		adapterPort, err = strconv.Atoi(portStr)
+	// Determine namespace for ConfigMap
+	ns := os.Getenv("POD_NAMESPACE")
+	if ns == "" {
+		nsBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 		if err != nil {
-			setupLog.Error(err, "invalid ADAPTER_PORT")
+			setupLog.Error(err, "cannot determine pod namespace")
+			os.Exit(1)
+		}
+		ns = strings.TrimSpace(string(nsBytes))
+	}
+
+	// Optionally create the default configuration ConfigMap before the provider
+	// tries to read it.
+	if createConfig {
+		if err := config.EnsureDefaultConfigMap(context.Background(), ns, configMapName, notificationDefaults); err != nil {
+			setupLog.Error(err, "failed to ensure default configuration ConfigMap")
 			os.Exit(1)
 		}
 	}
-	notificationsMode := os.Getenv("NOTIFICATIONS_MODE")
-	if notificationsMode == "" {
-		notificationsMode = "http"
-	}
-	if notificationsMode != "http" && notificationsMode != "kafka" {
-		setupLog.Error(fmt.Errorf("invalid NOTIFICATIONS_MODE %q", notificationsMode), "must be \"http\" or \"kafka\"")
+
+	// Create configuration provider
+	configProvider, err := config.NewProvider(context.Background(), ns, configMapName, notificationDefaults)
+	if err != nil {
+		setupLog.Error(err, "failed to create configuration provider")
 		os.Exit(1)
 	}
 
-	var kafkaNotificationsTopics []string
-	if topicsStr := os.Getenv("KAFKA_NOTIFICATIONS_TOPIC"); topicsStr != "" {
-		for _, t := range strings.Split(topicsStr, ",") {
-			if trimmed := strings.TrimSpace(t); trimmed != "" {
-				kafkaNotificationsTopics = append(kafkaNotificationsTopics, trimmed)
-			}
-		}
-	}
-	kafkaNotificationsGroupID := os.Getenv("KAFKA_NOTIFICATIONS_GROUP_ID")
-
-	var kafkaBrokers []string
-	if brokersStr := os.Getenv("KAFKA_BROKERS"); brokersStr != "" {
-		kafkaBrokers = strings.Split(brokersStr, ",")
-	}
-
-	var kafkaCfg *sarama.Config
-	if kafkaSecretName := os.Getenv("KAFKA_SECRET"); kafkaSecretName != "" {
-		ns := os.Getenv("POD_NAMESPACE")
-		if ns == "" {
-			nsBytes, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-			if err != nil {
-				setupLog.Error(err, "cannot determine pod namespace for KAFKA_SECRET")
-				os.Exit(1)
-			}
-			ns = strings.TrimSpace(string(nsBytes))
-		}
-		clientset, err := kubernetes.NewForConfig(ctrl.GetConfigOrDie())
-		if err != nil {
-			setupLog.Error(err, "creating kubernetes clientset for KAFKA_SECRET")
-			os.Exit(1)
-		}
-		secret, err := clientset.CoreV1().Secrets(ns).Get(context.Background(), kafkaSecretName, metav1.GetOptions{})
-		if err != nil {
-			setupLog.Error(err, "reading KAFKA_SECRET", "name", kafkaSecretName, "namespace", ns)
-			os.Exit(1)
-		}
-		kafkaCfg, err = kafkaconfig.NewConfig(secret.Data)
-		if err != nil {
-			setupLog.Error(err, "configuring kafka from secret", "name", kafkaSecretName)
-			os.Exit(1)
-		}
-		setupLog.Info("kafka configured from secret", "name", kafkaSecretName, "namespace", ns)
-	} else {
-		var err error
-		kafkaCfg, err = kafkaconfig.NewConfig(nil)
-		if err != nil {
-			setupLog.Error(err, "creating default kafka config")
-			os.Exit(1)
-		}
+	// Add config provider to manager
+	if err := mgr.Add(configProvider); err != nil {
+		setupLog.Error(err, "unable to add config provider to manager")
+		os.Exit(1)
 	}
 
 	if err := (&controller.ObjectBucketSourceReconciler{
 		Client:         mgr.GetClient(),
 		Scheme:         mgr.GetScheme(),
-		AdapterConfigs: adapterConfigs,
+		ConfigProvider: configProvider,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ObjectBucketSource")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder
 
-	if notificationsMode == "kafka" {
-		if len(kafkaNotificationsTopics) == 0 {
-			setupLog.Error(fmt.Errorf("KAFKA_NOTIFICATIONS_TOPIC is required when NOTIFICATIONS_MODE=kafka"), "missing env")
-			os.Exit(1)
-		}
-		if kafkaNotificationsGroupID == "" {
-			setupLog.Error(fmt.Errorf("KAFKA_NOTIFICATIONS_GROUP_ID is required when NOTIFICATIONS_MODE=kafka"), "missing env")
-			os.Exit(1)
-		}
-		if len(kafkaBrokers) == 0 {
-			setupLog.Error(fmt.Errorf("KAFKA_BROKERS is required when NOTIFICATIONS_MODE=kafka"), "missing env")
-			os.Exit(1)
-		}
-	}
-
 	notifServer := &notificationserver.NotificationServer{
-		Client:                    mgr.GetClient(),
-		Port:                      adapterPort,
-		KafkaBrokers:              kafkaBrokers,
-		KafkaConfig:               kafkaCfg,
-		NotificationsMode:         notificationsMode,
-		KafkaNotificationsTopics:  kafkaNotificationsTopics,
-		KafkaNotificationsGroupID: kafkaNotificationsGroupID,
+		Client:         mgr.GetClient(),
+		Port:           adapterPort,
+		ConfigProvider: configProvider,
 	}
 	if err := mgr.Add(notifServer); err != nil {
 		setupLog.Error(err, "unable to add notification server")
@@ -346,9 +294,14 @@ func main() {
 	}
 }
 
-func envOrDefault(key, defaultValue string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
+// splitAndTrim splits a comma-separated flag value, trimming whitespace and
+// dropping empty entries.
+func splitAndTrim(s string) []string {
+	var out []string
+	for _, part := range strings.Split(s, ",") {
+		if trimmed := strings.TrimSpace(part); trimmed != "" {
+			out = append(out, trimmed)
+		}
 	}
-	return defaultValue
+	return out
 }

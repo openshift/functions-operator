@@ -392,7 +392,7 @@ spec:
                         valueFrom:
                           fieldRef:
                             fieldPath: metadata.namespace
-                    image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:bbf2733f8ca0c32c206e272d65d057cc30c70c0906a1ab937a6d12e5039f492c
+                    image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:9d781966e29b5cd70288cab23df5205f64fb0b1ee59d415a03cab784bfc77aff
                     imagePullPolicy: Always
                     livenessProbe:
                       httpGet:
@@ -610,7 +610,7 @@ spec:
   version: 2.0.1
   relatedImages:
     - name: func-operator
-      image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:bbf2733f8ca0c32c206e272d65d057cc30c70c0906a1ab937a6d12e5039f492c
+      image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:9d781966e29b5cd70288cab23df5205f64fb0b1ee59d415a03cab784bfc77aff
     - name: objectbucket-notifications-adapter
       image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:e09c37d6b093021882b5d63ae224c3ceedf5e13778166ebc768938b4b670e801
     - name: faas-console-plugin

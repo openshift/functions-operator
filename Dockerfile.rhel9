@@ -1,7 +1,7 @@
 # The func binary is built and productized separately from its own rhel9 build
 # (see knative.dev/func/Dockerfile.func.rhel9); pull it from that image instead
 # of building it from source here.
-ARG FUNC_CLI_IMG=quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-func@sha256:93450e06b4aeef0afa1d8e380fc2af9146c4eebdf4caab22f6c318fdd5459648
+ARG FUNC_CLI_IMG=quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-func@sha256:f15e7d77502b423c0b7b421305165160273dc2a0b24e30d3248ff9b9e37f12df
 
 # Build the manager binary
 FROM registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.26-openshift-5.0 AS builder

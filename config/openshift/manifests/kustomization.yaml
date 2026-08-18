@@ -16,13 +16,19 @@ resources:
 - ../../scorecard
 
 patches:
-# Add consolePluginEnabled to the controller-config ConfigMap
-- path: configmap_patch.yaml
+# Remove the default controller-config ConfigMap; the operator creates it at
+# runtime via --create-config below.
+- path: delete_configmap_patch.yaml
   target:
     kind: ConfigMap
     name: func-operator-controller-config
 # Add CONSOLE_PLUGIN_IMAGE env var to the func-operator deployment
 - path: manager_patch.yaml
+  target:
+    kind: Deployment
+    name: func-operator-controller-manager
+# Add --create-config so the operator creates the controller-config ConfigMap at startup
+- path: create_config_patch.yaml
   target:
     kind: Deployment
     name: func-operator-controller-manager

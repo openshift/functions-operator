@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: func-operator-controller-config
-  namespace: func-operator-system
-data:
-  consolePluginEnabled: "true"

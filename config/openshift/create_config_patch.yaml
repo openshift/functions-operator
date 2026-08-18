@@ -1,0 +1,5 @@
+# Add --create-config so the operator creates the default controller-config
+# ConfigMap at startup (the ConfigMap is not shipped in the bundle).
+- op: add
+  path: /spec/template/spec/containers/0/args/-
+  value: --create-config

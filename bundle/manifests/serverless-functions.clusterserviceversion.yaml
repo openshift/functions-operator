@@ -29,7 +29,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-08-18T14:27:58Z"
+    createdAt: "2026-08-18T16:04:17Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.2+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/plugins: '["console-functions-plugin"]'
@@ -384,6 +384,7 @@ spec:
                       - --func-cli-path=/func
                       - --metrics-bind-address=:8080
                       - --metrics-secure=false
+                      - --create-config
                     command:
                       - /manager
                     env:

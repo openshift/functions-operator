@@ -29,7 +29,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-08-12T12:30:12Z"
+    createdAt: "2026-08-18T14:27:58Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.2+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/plugins: '["console-functions-plugin"]'
@@ -125,6 +125,7 @@ spec:
               resources:
                 - configmaps
               verbs:
+                - create
                 - get
                 - list
                 - watch
@@ -294,6 +295,14 @@ spec:
                 - ""
               resources:
                 - configmaps
+              verbs:
+                - create
+                - get
+                - list
+                - watch
+            - apiGroups:
+                - ""
+              resources:
                 - secrets
               verbs:
                 - get
@@ -456,6 +465,7 @@ spec:
                       - --metrics-bind-address=:8443
                       - --leader-elect
                       - --health-probe-bind-address=:8081
+                      - --create-config
                     command:
                       - /manager
                     env:
@@ -475,7 +485,7 @@ spec:
                         value: "8888"
                       - name: NOTIFICATIONS_MODE
                         value: http
-                    image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:e09c37d6b093021882b5d63ae224c3ceedf5e13778166ebc768938b4b670e801
+                    image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:1e11aabfae91a133f5e3fb82b42c9faef5bcd0eecb7aadf4533ae2a9a7c9e7e3
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -612,6 +622,6 @@ spec:
     - name: func-operator
       image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:a7e6d26c39b606678af26436e94d9954faee9de0ea1e245282fc09a6de7d73e4
     - name: objectbucket-notifications-adapter
-      image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:e09c37d6b093021882b5d63ae224c3ceedf5e13778166ebc768938b4b670e801
+      image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:1e11aabfae91a133f5e3fb82b42c9faef5bcd0eecb7aadf4533ae2a9a7c9e7e3
     - name: faas-console-plugin
       image: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:a9e9d038d19d7b9387ccea031300abe8bf1fc68e17ae5563942b70bc7c68bdcd

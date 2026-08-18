@@ -36,6 +36,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	sourcesv1alpha1 "github.com/functions-dev/func-operator/api/sources/v1alpha1"
+	"github.com/functions-dev/func-operator/internal/objectbucketsource/config"
 	"github.com/functions-dev/func-operator/internal/objectbucketsource/s3client"
 )
 
@@ -56,13 +57,13 @@ var obcGVR = schema.GroupVersionResource{
 type ObjectBucketSourceReconciler struct {
 	client.Client
 	Scheme         *runtime.Scheme
-	AdapterConfigs []AdapterConfig
+	ConfigProvider config.ConfigProvider
 }
 
 // +kubebuilder:rbac:groups=sources.functions.dev,resources=objectbucketsources,verbs=get;list;watch;create;update;patch;delete
 // +kubebuilder:rbac:groups=sources.functions.dev,resources=objectbucketsources/status,verbs=get;update;patch
 // +kubebuilder:rbac:groups=sources.functions.dev,resources=objectbucketsources/finalizers,verbs=update
-// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch
+// +kubebuilder:rbac:groups="",resources=configmaps,verbs=get;list;watch;create
 // +kubebuilder:rbac:groups="",resources=secrets,verbs=get;list;watch
 // +kubebuilder:rbac:groups=objectbucket.io,resources=objectbucketclaims,verbs=get;list;watch
 
@@ -271,18 +272,32 @@ func (r *ObjectBucketSourceReconciler) readOBCStorageClassName(ctx context.Conte
 }
 
 func (r *ObjectBucketSourceReconciler) resolveAdapterConfig(ctx context.Context, namespace, obcName string) (*AdapterConfig, error) {
-	if len(r.AdapterConfigs) == 0 {
-		return nil, fmt.Errorf("no adapter configs defined")
+	cfg := r.ConfigProvider.GetConfig()
+
+	adapterConfigs := []AdapterConfig{
+		{
+			ID:                  cfg.NoobaaAdapter.ID,
+			Topic:               cfg.NoobaaAdapter.TopicARN,
+			StorageClassPattern: cfg.NoobaaAdapter.StorageClassPattern,
+		},
+		{
+			ID:                  cfg.RadosgwAdapter.ID,
+			Topic:               cfg.RadosgwAdapter.TopicARN,
+			StorageClassPattern: cfg.RadosgwAdapter.StorageClassPattern,
+		},
 	}
-	if len(r.AdapterConfigs) == 1 {
-		return &r.AdapterConfigs[0], nil
+
+	if len(adapterConfigs) == 1 {
+		return &adapterConfigs[0], nil
 	}
+
 	storageClass, err := r.readOBCStorageClassName(ctx, namespace, obcName)
 	if err != nil {
 		return nil, err
 	}
-	for i := range r.AdapterConfigs {
-		cfg := &r.AdapterConfigs[i]
+
+	for i := range adapterConfigs {
+		cfg := &adapterConfigs[i]
 		if cfg.StorageClassPattern != nil && cfg.StorageClassPattern.MatchString(storageClass) {
 			return cfg, nil
 		}

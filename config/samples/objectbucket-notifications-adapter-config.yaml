@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: objectbucket-notifications-adapter-config
+  namespace: system
+data:
+  # NooBaa adapter configuration
+  NOOBAA_ADAPTER_ID: "mcg-adapter"
+  NOOBAA_ADAPTER_TOPIC_ARN: "mcg-adapter-connection/connect.json"
+  NOOBAA_ADAPTER_STORAGECLASS_PATTERN: ".*noobaa\\.io$"
+
+  # RadosGW adapter configuration
+  RADOSGW_ADAPTER_ID: "rgw-adapter"
+  RADOSGW_ADAPTER_TOPIC_ARN: "arn:aws:sns:ocs-storagecluster-cephobjectstore::rgw-adapter-notifications"
+  RADOSGW_ADAPTER_STORAGECLASS_PATTERN: ".*ceph-rgw$"
+
+  # Notification transport configuration (dynamic).
+  # These override the corresponding command-line flag defaults and are applied
+  # at runtime. Changing any Kafka setting gracefully restarts the consumer.
+  # NOTIFICATIONS_MODE: "http"                       # http or kafka
+  # KAFKA_BROKERS: "broker1:9092,broker2:9092"       # required for kafka mode
+  # KAFKA_NOTIFICATIONS_TOPICS: "mcg-notifications,rgw-notifications"  # required for kafka mode
+  # KAFKA_NOTIFICATIONS_GROUP_ID: "adapter-consumer-group"            # required for kafka mode
+
+  # Kafka secret for authentication (optional)
+  # Uncomment to use a Kafka secret for authentication
+  # KAFKA_SECRET: "kafka-credentials"

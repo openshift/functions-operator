@@ -82,6 +82,7 @@ type cliFlags struct {
 	funcCLIPath          string
 	funcCLICheckInterval time.Duration
 	disableFuncCLIUpdate bool
+	createConfig         bool
 }
 
 func parseFlags() cliFlags {
@@ -109,6 +110,8 @@ func parseFlags() cliFlags {
 	flag.DurationVar(&flags.funcCLICheckInterval, "func-cli-check-interval", 5*time.Minute,
 		"How often to check for new func CLI versions")
 	flag.BoolVar(&flags.disableFuncCLIUpdate, "disable-func-cli-update", false, "Disable the function-cli update")
+	flag.BoolVar(&flags.createConfig, "create-config", false,
+		"If set, create the default controller-config ConfigMap at startup if it does not already exist.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -306,6 +309,18 @@ func main() {
 	metricsServerOptions := setupMetricsServerOptions(flags.metricsAddr, flags.secureMetrics, metricsCertWatcher, tlsOpts)
 
 	operatorNamespace := getOperatorNamespace()
+
+	// Optionally create the default controller-config ConfigMap before the manager
+	// starts. This is used when deploying via OLM, where the default ConfigMap is
+	// not part of the bundle. When deploying via the config/ manifests, the
+	// ConfigMap is managed there and this flag is left unset.
+	if flags.createConfig {
+		if err := controller.EnsureDefaultConfigMap(context.Background(), operatorNamespace); err != nil {
+			setupLog.Error(err, "failed to ensure default controller-config ConfigMap")
+			os.Exit(1)
+		}
+	}
+
 	cacheOpts := setupCacheOptions(operatorNamespace)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{

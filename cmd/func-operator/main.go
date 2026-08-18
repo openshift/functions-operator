@@ -32,7 +32,6 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
-	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -82,6 +81,7 @@ type cliFlags struct {
 	funcCLIPath          string
 	funcCLICheckInterval time.Duration
 	disableFuncCLIUpdate bool
+	createConfig         bool
 }
 
 func parseFlags() cliFlags {
@@ -109,6 +109,8 @@ func parseFlags() cliFlags {
 	flag.DurationVar(&flags.funcCLICheckInterval, "func-cli-check-interval", 5*time.Minute,
 		"How often to check for new func CLI versions")
 	flag.BoolVar(&flags.disableFuncCLIUpdate, "disable-func-cli-update", false, "Disable the function-cli update")
+	flag.BoolVar(&flags.createConfig, "create-config", false,
+		"If set, create the default controller-config ConfigMap at startup if it does not already exist.")
 	opts := zap.Options{
 		Development: true,
 	}
@@ -252,15 +254,14 @@ func setupCacheOptions(operatorNamespace string) cache.Options {
 		setupLog.Info("Operator watching all namespaces")
 	}
 
-	// Watch these types only in the operator's namespace.
-	// They are only used by the consoleplugin controller and the controller-config ConfigMap,
-	// without affecting which namespaces Functions are watched in.
-	operatorNsConfig := map[string]cache.Config{operatorNamespace: {}}
+	// Always watch ConfigMaps in the operator's namespace so it can access the controller-config ConfigMap,
+	// without affecting which namespaces Functions are watched in
 	cacheOpts.ByObject = map[client.Object]cache.ByObject{
-		&v1.ConfigMap{}:      {Namespaces: operatorNsConfig},
-		&appsv1.Deployment{}: {Namespaces: operatorNsConfig},
-		&v1.Service{}:        {Namespaces: operatorNsConfig},
-		&v1.ServiceAccount{}: {Namespaces: operatorNsConfig},
+		&v1.ConfigMap{}: {
+			Namespaces: map[string]cache.Config{
+				operatorNamespace: {},
+			},
+		},
 	}
 
 	return cacheOpts
@@ -306,6 +307,18 @@ func main() {
 	metricsServerOptions := setupMetricsServerOptions(flags.metricsAddr, flags.secureMetrics, metricsCertWatcher, tlsOpts)
 
 	operatorNamespace := getOperatorNamespace()
+
+	// Optionally create the default controller-config ConfigMap before the manager
+	// starts. This is used when deploying via OLM, where the default ConfigMap is
+	// not part of the bundle. When deploying via the config/ manifests, the
+	// ConfigMap is managed there and this flag is left unset.
+	if flags.createConfig {
+		if err := controller.EnsureDefaultConfigMap(context.Background(), operatorNamespace); err != nil {
+			setupLog.Error(err, "failed to ensure default controller-config ConfigMap")
+			os.Exit(1)
+		}
+	}
+
 	cacheOpts := setupCacheOptions(operatorNamespace)
 
 	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
@@ -365,16 +378,6 @@ func main() {
 		OperatorNamespace: operatorNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Function")
-		os.Exit(1)
-	}
-	if err := (&controller.ConsolePluginReconciler{
-		Client:             mgr.GetClient(),
-		DirectReader:       mgr.GetAPIReader(),
-		OperatorNamespace:  operatorNamespace,
-		ConsolePluginImage: os.Getenv("CONSOLE_PLUGIN_IMAGE"),
-		PodName:            os.Getenv("POD_NAME"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ConsolePlugin")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

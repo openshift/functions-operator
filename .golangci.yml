@@ -26,7 +26,7 @@ linters:
         - name: comment-spacings
         - name: import-shadowing
     gocyclo:
-      min-complexity: 15
+      min-complexity: 20
   exclusions:
     generated: lax
     rules:

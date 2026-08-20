@@ -36,6 +36,9 @@ spec:
     - linux/ppc64le
   - name: dockerfile
     value: Dockerfile.rhel9
+  - name: build-args
+    value:
+    - GO_BUILDER=brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.26
   pipelineSpec:
     description: |
       This pipeline is ideal for building multi-arch container images from a Containerfile while maintaining trust after pipeline customization.

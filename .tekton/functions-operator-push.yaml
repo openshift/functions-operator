@@ -9,6 +9,8 @@ metadata:
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
       == "main" && ("Dockerfile.rhel9".pathChanged()
+      || "go.mod".pathChanged()
+      || "go.sum".pathChanged()
       || "api/***".pathChanged()
       || "cmd/func-operator/***".pathChanged()
       || "internal/***".pathChanged()

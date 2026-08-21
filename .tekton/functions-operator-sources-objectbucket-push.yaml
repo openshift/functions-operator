@@ -8,7 +8,9 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "main" && ("Dockerfile.source-objectbucket".pathChanged()
+      == "main" && ("Dockerfile.source-objectbucket.rhel9".pathChanged()
+      || "go.mod".pathChanged()
+      || "go.sum".pathChanged()
       || "api/sources/***".pathChanged()
       || "cmd/objectbucket-notifications-adapter/***".pathChanged()
       || "internal/***".pathChanged()

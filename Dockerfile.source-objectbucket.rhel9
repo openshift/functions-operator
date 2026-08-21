@@ -19,17 +19,14 @@ ENV GOEXPERIMENT=strictfipsruntime
 # Copy the Go Modules manifests
 COPY go.mod go.mod
 COPY go.sum go.sum
-# cache deps before building and copying source so that we don't need to re-download as much
-# and so that source changes don't invalidate our downloaded layer
-RUN go mod download
-
 # Copy the go source
 COPY cmd/objectbucket-notifications-adapter/main.go cmd/objectbucket-notifications-adapter/main.go
 COPY api/ api/
 COPY internal/ internal/
 
 # Build
-RUN GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a \
+RUN if [ -f /cachi2/cachi2.env ]; then source /cachi2/cachi2.env; fi && \
+        GOOS=${TARGETOS:-linux} GOARCH=${TARGETARCH} go build -a \
         -tags strictfipsruntime,exclude_graphdriver_btrfs \
         -o manager cmd/objectbucket-notifications-adapter/main.go
 

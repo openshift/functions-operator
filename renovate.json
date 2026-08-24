@@ -4,5 +4,9 @@
     "github>konflux-ci/mintmaker//config/renovate/renovate.json",
     "config:best-practices"
   ],
-  "enabledManagers": ["tekton", "dockerfile"]
+  "enabledManagers": ["tekton", "dockerfile"],
+  "ignorePaths": [
+    "Dockerfile",
+    "Dockerfile.source-objectbucket"
+  ]
 }

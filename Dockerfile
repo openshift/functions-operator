@@ -1,5 +1,5 @@
 # Build the manager binary
-FROM golang:1.26 AS builder
+FROM golang:1.26@sha256:45a5f7a810238aabcbad211d70b9ae082022d96f7c7259e94041ad1b933575ac AS builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -31,7 +31,7 @@ RUN go install github.com/go-delve/delve/cmd/dlv@latest
 
 
 # Temporary until we have the latest features (registry-authfile, ...) in a released func cli version
-FROM golang:1.26 AS func-cli-builder
+FROM golang:1.26@sha256:45a5f7a810238aabcbad211d70b9ae082022d96f7c7259e94041ad1b933575ac AS func-cli-builder
 ARG TARGETOS
 ARG TARGETARCH
 
@@ -47,7 +47,7 @@ WORKDIR /workspace
 RUN git clone --branch ${FUNC_CLI_BRANCH} --single-branch --depth 1 https://github.com/${FUNC_CLI_GH_REPO} .
 RUN make build
 
-FROM registry.access.redhat.com/ubi9/ubi AS debug
+FROM registry.access.redhat.com/ubi9/ubi@sha256:5426a8f45e80a07168a30ea24d84f266094b3756624a5508cc53927e6ee39e09 AS debug
 WORKDIR /
 COPY --from=builder-debug /workspace/manager-debug .
 COPY --from=builder-debug /go/bin/dlv .
@@ -58,7 +58,7 @@ ENTRYPOINT ["/dlv", "exec", "/manager-debug", "--headless", "--listen=:40000", "
 
 # Use distroless as minimal base image to package the manager binary
 # Refer to https://github.com/GoogleContainerTools/distroless for more details
-FROM gcr.io/distroless/static:nonroot AS prod
+FROM gcr.io/distroless/static:nonroot@sha256:1c2c046bc09ed40fad370b599a0b1ae7987f55b01e247cf27a7c27cd97e5bbc7 AS prod
 WORKDIR /
 COPY --from=builder /workspace/manager .
 COPY --from=func-cli-builder /workspace/func /func/func

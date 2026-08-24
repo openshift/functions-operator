@@ -1,4 +1,4 @@
-FROM registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.22
+FROM registry.redhat.io/openshift4/ose-operator-registry-rhel9:v4.22@sha256:9cca19e7e386c59c8d5d78a5ea5a11abdb22295fbe4b08e44817eff49492249c
 
 ENTRYPOINT ["/bin/opm"]
 CMD ["serve", "/configs", "--cache-dir=/tmp/cache"]

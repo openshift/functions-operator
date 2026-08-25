@@ -3,4 +3,4 @@ GenerateMajorChannels: true
 GenerateMinorChannels: false
 Candidate:
   Bundles:
-  - Image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-bundle@sha256:efdc2885d7051284d3cd033a499134930fba2c8fcb94b4f1d6f49520997d6a40
+  - Image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-bundle@sha256:1cf0e9fd6c85802d03f5bd36d2b9b3f9aab5eea9dd67ec53388c9ba61f0efd4b

@@ -18,6 +18,7 @@ package e2e
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 
 	"github.com/functions-dev/func-operator/test/utils"
@@ -29,6 +30,26 @@ const namespace = "func-operator-system"
 
 // serviceAccountName created for the project
 const serviceAccountName = "func-operator-controller-manager"
+
+func deployerIsKedaOrRaw() bool {
+	d := os.Getenv("DEFAULT_DEPLOYER")
+	return d == "keda" || d == "raw"
+}
+
+// Newest knative/func that still ships go/http middleware func-go v0.21.3
+// and has knative, raw, and keda deployers. Current CLI (1.23+) ships
+// v0.22.0, so a seed with this version makes the operator redeploy.
+const staleFuncCLI = "v1.22.2"
+const staleMiddlewareVersion = "v0.21.3"
+
+// workloadKind is the cluster object that holds the function pod template.
+// keda/raw use a Deployment; knative uses a Service (ksvc).
+func workloadKind() string {
+	if deployerIsKedaOrRaw() {
+		return "deploy"
+	}
+	return "ksvc"
+}
 
 // logFailedTestDetails logs function resource and controller logs on test failure
 func logFailedTestDetails(functionName, functionNamespace string) {

@@ -389,7 +389,7 @@ spec:
                       - /manager
                     env:
                       - name: CONSOLE_PLUGIN_IMAGE
-                        value: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:336489cd99e8e84f41df61083172241975c6d050b8026efa39c28549ce472532
+                        value: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:62fced92dba5e634f870433b2230e202f32be1677a329481dbef07b08f94a883
                       - name: POD_NAME
                         valueFrom:
                           fieldRef:
@@ -625,4 +625,4 @@ spec:
     - name: objectbucket-notifications-adapter
       image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:e8e8d76fe9bb7e67d78a2e2c68487031d37b0cc861164ca84e9a1b2a103a2c90
     - name: faas-console-plugin
-      image: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:336489cd99e8e84f41df61083172241975c6d050b8026efa39c28549ce472532
+      image: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:62fced92dba5e634f870433b2230e202f32be1677a329481dbef07b08f94a883

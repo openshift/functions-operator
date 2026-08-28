@@ -752,24 +752,18 @@ var _ = Describe("Operator", func() {
 	// --image-pull-secret to the func CLI during a redeploy, which causes the
 	// func CLI to set imagePullSecrets on the function's pod spec.
 	//
-	// It uses a dummy dockerconfigjson secret and the unauthenticated kind-registry
-	// because the kind-registry's built-in htpasswd auth is all-or-nothing (no
-	// per-repository scoping), so enabling auth would break all other tests. The
-	// unit tests in function_controller_test.go verify the --image-pull-secret flag
-	// is passed; this test confirms the Knative Service's pod template actually
-	// receives the imagePullSecrets after a real redeploy.
+	// It uses a dummy dockerconfigjson secret. Kind uses an unauthenticated
+	// registry (htpasswd is all-or-nothing, so enabling auth would break
+	// other tests). Unit tests in function_controller_test.go verify the
+	// flag; this test confirms the workload pod template receives
+	// imagePullSecrets after a real redeploy (KService for knative,
+	// Deployment for keda/raw).
 	Context("with a registry auth secret", func() {
 		var repoURL string
 		var repoDir string
 		var functionName, functionNamespace string
 
 		BeforeEach(func() {
-			if os.Getenv("DEFAULT_DEPLOYER") == "keda" ||
-				os.Getenv("DEFAULT_DEPLOYER") == "raw" {
-				Skip("Skipping registry auth test for Keda & raw deployer, " +
-					"as test inspect KService directly")
-			}
-
 			var err error
 
 			username, password, _, cleanup, err := repoProvider.CreateRandomUser()
@@ -784,19 +778,17 @@ var _ = Describe("Operator", func() {
 			Expect(err).NotTo(HaveOccurred())
 			utils.DeferCleanupOnSuccess(cleanupNamespaces, functionNamespace)
 
-			oldFuncVersion := "v1.20.2"
+			// Seed with staleFuncCLI so middleware is outdated and the operator
+			// actually runs deploy() (the path that passes --image-pull-secret).
 			repoDir, err = utils.InitializeRepoWithFunction(
-				repoURL,
-				username,
-				password,
-				"go",
-				utils.WithCliVersion(oldFuncVersion))
+				repoURL, username, password, "go",
+				utils.WithCliVersion(staleFuncCLI))
 			Expect(err).NotTo(HaveOccurred())
 			utils.DeferCleanupOnSuccess(os.RemoveAll, repoDir)
 
 			out, err := utils.RunFuncDeploy(repoDir,
 				utils.WithNamespace(functionNamespace),
-				utils.WithDeployCliVersion(oldFuncVersion))
+				utils.WithDeployCliVersion(staleFuncCLI))
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 
@@ -812,7 +804,7 @@ var _ = Describe("Operator", func() {
 			logFailedTestDetails(functionName, functionNamespace)
 		})
 
-		It("should set imagePullSecrets on the Knative Service", func() {
+		It("should set imagePullSecrets on the function workload", func() {
 			funcMetadata, err := funcfn.NewFunction(repoDir)
 			Expect(err).NotTo(HaveOccurred())
 			deployedFunctionName := funcMetadata.Name
@@ -860,14 +852,14 @@ var _ = Describe("Operator", func() {
 
 			Eventually(functionBecomesReady(functionName, functionNamespace)).Should(Succeed())
 
-			// Verify the Knative Service has imagePullSecrets set on its pod template.
+			// Verify the workload pod template has imagePullSecrets.
 			Eventually(func(g Gomega) {
-				cmd := exec.Command("kubectl", "get", "ksvc", deployedFunctionName,
+				cmd := exec.Command("kubectl", "get", workloadKind(), deployedFunctionName,
 					"-n", functionNamespace,
 					"-o", "jsonpath={.spec.template.spec.imagePullSecrets}")
 				out, err := utils.Run(cmd)
 				g.Expect(err).NotTo(HaveOccurred())
-				g.Expect(out).NotTo(BeEmpty(), "imagePullSecrets not set on Knative Service %s", deployedFunctionName)
+				g.Expect(out).NotTo(BeEmpty(), "imagePullSecrets not set on %s %s", workloadKind(), deployedFunctionName)
 
 				var pullSecrets []v1.LocalObjectReference
 				g.Expect(json.Unmarshal([]byte(out), &pullSecrets)).To(Succeed())

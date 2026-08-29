@@ -87,7 +87,7 @@ func (r *ObjectBucketSourceReconciler) Reconcile(ctx context.Context, req ctrl.R
 		if err := r.Update(ctx, &source); err != nil {
 			return ctrl.Result{}, err
 		}
-		return ctrl.Result{Requeue: true}, nil
+		return ctrl.Result{}, nil
 	}
 
 	obcName := source.Spec.ObjectBucketClaim.Name

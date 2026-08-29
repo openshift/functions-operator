@@ -45,11 +45,6 @@ var _ = Describe("Middleware Update", func() {
 		var functionName, functionNamespace string
 
 		BeforeEach(func() {
-			if os.Getenv("DEFAULT_DEPLOYER") == "keda" || os.Getenv("DEFAULT_DEPLOYER") == "raw" {
-				Skip("Skipping middleware test for Keda & raw deployer, " +
-					"as those are not supported on used CLI version (1.20.x) of this tests")
-			}
-
 			var err error
 
 			// Create repository provider resources with automatic cleanup
@@ -65,22 +60,20 @@ var _ = Describe("Middleware Update", func() {
 			Expect(err).NotTo(HaveOccurred())
 			utils.DeferCleanupOnSuccess(cleanupNamespaces, functionNamespace)
 
-			// Initialize repository with function code using OLD func CLI version
-			// v1.20.2 has no middleware-version label and uses instance-compatible templates
-			oldFuncVersion := "v1.20.2"
+			// Seed with staleFuncCLI (func-go v0.21.3, knative/raw/keda).
+			// Operator current CLI is 1.23+ (func-go v0.22.0) so it must redeploy.
 			repoDir, err = utils.InitializeRepoWithFunction(
 				repoURL,
 				username,
 				password,
 				"go",
-				utils.WithCliVersion(oldFuncVersion))
+				utils.WithCliVersion(staleFuncCLI))
 			Expect(err).NotTo(HaveOccurred())
 			utils.DeferCleanupOnSuccess(os.RemoveAll, repoDir)
 
-			// Deploy function using the same OLD func CLI version
 			out, err := utils.RunFuncDeploy(repoDir,
 				utils.WithNamespace(functionNamespace),
-				utils.WithDeployCliVersion(oldFuncVersion))
+				utils.WithDeployCliVersion(staleFuncCLI))
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 
@@ -120,7 +113,7 @@ var _ = Describe("Middleware Update", func() {
 			// We use skopeo with localhost:5001 (port-forward to the registry) to
 			// directly inspect the OCI image labels and verify the middleware was updated.
 
-			// Get initial image digest from func describe (deployed with v1.20.2)
+			// Get initial image digest from func describe (seeded with staleFuncCLI)
 			out, err := utils.RunFunc("describe", deployedFunctionName, "-n", functionNamespace, "-o", "yaml")
 			Expect(err).NotTo(HaveOccurred())
 
@@ -130,9 +123,9 @@ var _ = Describe("Middleware Update", func() {
 
 			initialImage := initialInstance.Image
 			Expect(initialImage).NotTo(BeEmpty(), "Initial image should be available from func describe")
-			_, _ = fmt.Fprintf(GinkgoWriter, "Initial image (deployed with v1.20.2): %s\n", initialImage)
+			_, _ = fmt.Fprintf(GinkgoWriter, "Initial image (deployed with %s): %s\n", staleFuncCLI, initialImage)
 
-			// Verify initial image has no middleware-version label (v1.20.2 doesn't set it)
+			// Verify initial image is labeled with stale middleware (func-go v0.21.3)
 			initialImageLocal := strings.Replace(initialImage, "kind-registry:5000", "localhost:5001", 1)
 			// Remove tag if both tag and digest are present (skopeo doesn't support this format)
 			if strings.Contains(initialImageLocal, "@") {
@@ -161,8 +154,9 @@ var _ = Describe("Middleware Update", func() {
 			Expect(err).NotTo(HaveOccurred())
 
 			initialMiddlewareVersion := initialImageLabels.Labels[funcfn.MiddlewareVersionLabelKey]
-			_, _ = fmt.Fprintf(GinkgoWriter, "Initial middleware-version label: '%s' (expected empty for v1.20.2)\n",
-				initialMiddlewareVersion)
+			_, _ = fmt.Fprintf(GinkgoWriter, "Initial middleware-version label: '%s' (expected %s)\n",
+				initialMiddlewareVersion, staleMiddlewareVersion)
+			Expect(initialMiddlewareVersion).To(Equal(staleMiddlewareVersion))
 
 			// Create a Function resource
 			fn := &functionsdevv1alpha1.Function{
@@ -233,8 +227,8 @@ var _ = Describe("Middleware Update", func() {
 			updatedMiddlewareVersion := updatedImageLabels.Labels[funcfn.MiddlewareVersionLabelKey]
 			_, _ = fmt.Fprintf(GinkgoWriter, "Updated middleware-version label: '%s'\n", updatedMiddlewareVersion)
 
-			// The operator should have set a middleware version
 			Expect(updatedMiddlewareVersion).NotTo(BeEmpty(), "Operator should have deployed with middleware-version label set")
+			Expect(updatedMiddlewareVersion).NotTo(Equal(initialMiddlewareVersion), "Operator should have bumped middleware")
 
 			Eventually(functionMiddlewareUpToDate(functionName, functionNamespace), 2*time.Minute).Should(Succeed())
 		})
@@ -253,11 +247,6 @@ var _ = Describe("Middleware Update", func() {
 		var originalConfigMapData map[string]string
 
 		BeforeEach(func() {
-			if os.Getenv("DEFAULT_DEPLOYER") == "keda" || os.Getenv("DEFAULT_DEPLOYER") == "raw" {
-				Skip("Skipping middleware test for Keda & raw deployer, " +
-					"as those are not supported on used CLI version (1.20.x) of this tests")
-			}
-
 			var err error
 
 			// Save original ConfigMap data to restore later
@@ -300,22 +289,18 @@ var _ = Describe("Middleware Update", func() {
 			Expect(err).NotTo(HaveOccurred())
 			utils.DeferCleanupOnSuccess(cleanupNamespaces, functionNamespace)
 
-			// Initialize repository with function code using OLD func CLI version
-			// to ensure middleware will be outdated
-			oldFuncVersion := "v1.20.2"
 			repoDir, err = utils.InitializeRepoWithFunction(
 				repoURL,
 				username,
 				password,
 				"go",
-				utils.WithCliVersion(oldFuncVersion))
+				utils.WithCliVersion(staleFuncCLI))
 			Expect(err).NotTo(HaveOccurred())
 			utils.DeferCleanupOnSuccess(os.RemoveAll, repoDir)
 
-			// Deploy function using the same OLD func CLI version
 			out, err := utils.RunFuncDeploy(repoDir,
 				utils.WithNamespace(functionNamespace),
-				utils.WithDeployCliVersion(oldFuncVersion))
+				utils.WithDeployCliVersion(staleFuncCLI))
 			Expect(err).NotTo(HaveOccurred())
 			_, _ = fmt.Fprint(GinkgoWriter, out)
 
@@ -433,7 +418,6 @@ var _ = Describe("Middleware Update", func() {
 				}, fn)
 				g.Expect(err).NotTo(HaveOccurred())
 
-				// The image should have changed (middleware was updated)
 				g.Expect(fn.Status.Deployment.Image).NotTo(BeEmpty())
 				g.Expect(fn.Status.Deployment.Image).NotTo(Equal(imageBefore),
 					"Image should have changed after middleware update")

@@ -5,6 +5,7 @@
 # Prerequisites:
 #   - OpenShift Data Foundation installed in `openshift-storage`
 #   - Strimzi Kafka cluster `my-cluster` running in `kafka` namespace
+#   - Kafka configured for SASL/plain on port :9095
 #
 # Before running this script, install the CRD and the objectbucket-notifications-adapter from this repo:
 #   make install
@@ -13,7 +14,7 @@
 set -Eeuxo pipefail
 
 mcg_adapter_topic="mcg-adapter-notifications"
-mcg_adapter_namespace="objectbucket-notifications-adapter-system"
+mcg_adapter_namespace="openshift-operators"
 kafka_namespace="kafka"
 kafka_cluster="my-cluster"
 connection_name="mcg-adapter-connection"
@@ -154,3 +155,23 @@ oc create secret generic objectbucket-notifications-adapter-user -n "${mcg_adapt
   --from-literal=sasl.mechanism=SCRAM-SHA-512 \
   --from-literal=user=objectbucket-notifications-adapter-user \
   --from-literal=password="${adapter_password}"
+
+# Update the objectbucket-notifications ConfigMap
+oc apply -f - <<EOF
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: objectbucket-notifications-adapter-config
+  namespace: ${mcg_adapter_namespace}
+data:
+  KAFKA_BROKERS: ${kafka_cluster}-kafka-bootstrap.${kafka_namespace}.svc:9095
+  KAFKA_NOTIFICATIONS_GROUP_ID: objectbucket-notifications-adapter
+  KAFKA_NOTIFICATIONS_TOPICS: ${mcg_adapter_topic}
+  KAFKA_SECRET: objectbucket-notifications-adapter-user
+  NOOBAA_ADAPTER_ID: mcg-adapter
+  NOOBAA_ADAPTER_STORAGECLASS_PATTERN: .*noobaa\.io$
+  NOOBAA_ADAPTER_TOPIC_ARN: mcg-adapter-connection/connect.json
+  NOTIFICATIONS_MODE: kafka
+EOF
+
+

@@ -35,3 +35,8 @@ bin/
 
 # Local registry certificates
 hack/registry-certs/
+
+#ai
+CLAUDE.md
+CLAUDE.local.md
+.claude/*local*

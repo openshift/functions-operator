@@ -486,7 +486,7 @@ spec:
                         value: "8888"
                       - name: NOTIFICATIONS_MODE
                         value: http
-                    image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:02a7beff218905dbf5be856a86aa2d26dee86bcc3976d5bfcb26ff485c8e9eb0
+                    image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:2554c71a31cde7f364d1313f7429cc673a16b7f7a59377f3852385a0a847c4e2
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -623,6 +623,6 @@ spec:
     - name: func-operator
       image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator@sha256:a87168723f9c0f5450e03843e084a91c6b02cb35262d6d09aec9b7b5306b471d
     - name: objectbucket-notifications-adapter
-      image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:02a7beff218905dbf5be856a86aa2d26dee86bcc3976d5bfcb26ff485c8e9eb0
+      image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-sources-objectbucket@sha256:2554c71a31cde7f364d1313f7429cc673a16b7f7a59377f3852385a0a847c4e2
     - name: faas-console-plugin
       image: quay.io/redhat-user-workloads/ocp-serverless-tenant/faas-console-plugin@sha256:891d3daab1fee837d41ed8baeb3143615a344b1fbd272a159ccb44bdb3c4ce99

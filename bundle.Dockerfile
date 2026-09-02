@@ -1,4 +1,5 @@
-FROM scratch
+ARG GO_RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal
+FROM $GO_RUNTIME
 
 # Core bundle labels.
 LABEL operators.operatorframework.io.bundle.mediatype.v1=registry+v1
@@ -18,3 +19,14 @@ LABEL operators.operatorframework.io.test.config.v1=tests/scorecard/
 COPY bundle/manifests /manifests/
 COPY bundle/metadata /metadata/
 COPY bundle/tests/scorecard /tests/scorecard/
+
+LABEL name="openshift-serverless-tech-preview/functions-func-rhel9" \
+      com.redhat.component="openshift-serverless-functions-operator-bundle-container" \
+      version="2.0" \
+      release="1" \
+      summary="OpenShift Serverless Functions Operator bundle" \
+      description="Contains an OLM bundle of the OpenShift Serverless Functions Operator" \
+      io.k8s.display-name="OpenShift Serverless Functions Operator bundle" \
+      io.k8s.description="Contains an OLM bundle of the OpenShift Serverless Functions Operator" \
+      io.openshift.tags="openshift,serverless,functions,operator,bundle" \
+      maintainer="serverless-support@redhat.com"

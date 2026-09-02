@@ -5,15 +5,8 @@
     "config:best-practices"
   ],
   "enabledManagers": ["tekton", "dockerfile"],
-  "packageRules": [
-    {
-      "description": "Do not pin digests on FBC catalog Dockerfiles - OCP version detection requires tags",
-      "matchPackageNames": [
-        "registry.redhat.io/openshift4/ose-operator-registry-rhel9",
-        "registry.redhat.io/openshift5/ose-operator-registry-rhel9"
-      ],
-      "enabled": false,
-      "pinDigests": false
-    }
+  "ignoreDeps": [
+    "registry.redhat.io/openshift4/ose-operator-registry-rhel9",
+    "registry.redhat.io/openshift5/ose-operator-registry-rhel9"
   ]
 }

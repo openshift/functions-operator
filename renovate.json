@@ -8,12 +8,12 @@
   "packageRules": [
     {
       "description": "Do not pin digests on FBC catalog Dockerfiles - OCP version detection requires tags",
-      "matchFileNames": ["catalogs/*/Dockerfile.catalog"],
       "matchPackageNames": [
         "registry.redhat.io/openshift4/ose-operator-registry-rhel9",
         "registry.redhat.io/openshift5/ose-operator-registry-rhel9"
       ],
-      "enabled": false
+      "enabled": false,
+      "pinDigests": false
     }
   ]
 }

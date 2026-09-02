@@ -48,4 +48,15 @@ COPY --from=func-cli /usr/bin/func /func/func
 COPY LICENSE /licenses/
 USER 65532:65532
 
+LABEL name="openshift-serverless-tech-preview/functions-rhel9-operator" \
+      com.redhat.component="openshift-serverless-functions-operator-container" \
+      version="2.0" \
+      release="1" \
+      summary="OpenShift Serverless Functions operator" \
+      description="Manages the lifecycle of the OpenShift Serverless Functions components" \
+      io.k8s.display-name="OpenShift Serverless Functions operator" \
+      io.k8s.description="Manages the lifecycle of the OpenShift Serverless Functions components" \
+      io.openshift.tags="openshift,serverless,functions,operator" \
+      maintainer="serverless-support@redhat.com"
+
 ENTRYPOINT ["/manager"]

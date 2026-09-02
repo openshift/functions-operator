@@ -37,4 +37,15 @@ COPY --from=builder /workspace/manager .
 COPY LICENSE /licenses/
 USER 65532:65532
 
+LABEL name="openshift-serverless-tech-preview/objectbucket-notifications-adapter-rhel9" \
+      com.redhat.component="openshift-serverless-functions-operator-sources-objectbucket-container" \
+      version="2.0" \
+      release="1" \
+      summary="OpenShift Serverless Functions ObjectBucket Source container" \
+      description="Provides an integration with OpenShift Data Foundation bucket notifications" \
+      io.k8s.display-name="OpenShift Serverless Functions ObjectBucket Source container" \
+      io.k8s.description="Provides an integration with OpenShift Data Foundation bucket notifications" \
+      io.openshift.tags="openshift,serverless,functions,objectbucket,bucket,source" \
+      maintainer="serverless-support@redhat.com"
+
 ENTRYPOINT ["/manager"]

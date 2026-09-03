@@ -5,6 +5,12 @@
     "config:best-practices"
   ],
   "enabledManagers": ["tekton", "dockerfile"],
+  "packageRules": [
+    {
+      "matchUpdateTypes": ["pinDigest"],
+      "enabled": false
+    }
+  ],
   "ignoreDeps": [
     "registry.redhat.io/openshift4/ose-operator-registry-rhel9",
     "registry.redhat.io/openshift5/ose-operator-registry-rhel9"

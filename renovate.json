@@ -7,6 +7,7 @@
   "enabledManagers": ["tekton", "dockerfile"],
   "ignorePaths": [
     "+(Dockerfile)",
-    "+(Dockerfile.source-objectbucket)"
+    "+(Dockerfile.source-objectbucket)",
+    "catalogs/*/Dockerfile*"
   ]
 }

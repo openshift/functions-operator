@@ -27,6 +27,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 )
 
@@ -190,6 +191,37 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		})
 	})
 
+	Context("getGHApiURL", func() {
+		It("should return ghApiUrl from ConfigMap when set", func() {
+			createConfigMap(map[string]string{
+				consolePluginConfigKey: "true",
+				"ghApiUrl":             "https://github.example.com/api/v3",
+			})
+			url := reconciler.getGHApiURL(ctx)
+			Expect(url).To(Equal("https://github.example.com/api/v3"))
+		})
+
+		It("should fall back to GH_API_URL env var when not in ConfigMap", func() {
+			createConfigMap(map[string]string{consolePluginConfigKey: "true"})
+			GinkgoT().Setenv("GH_API_URL", "https://env-gh.example.com/api")
+			url := reconciler.getGHApiURL(ctx)
+			Expect(url).To(Equal("https://env-gh.example.com/api"))
+		})
+
+		It("should return empty string when not in ConfigMap and env var is unset", func() {
+			createConfigMap(map[string]string{consolePluginConfigKey: "true"})
+			GinkgoT().Setenv("GH_API_URL", "")
+			url := reconciler.getGHApiURL(ctx)
+			Expect(url).To(BeEmpty())
+		})
+
+		It("should return empty string when ConfigMap does not exist", func() {
+			GinkgoT().Setenv("GH_API_URL", "")
+			url := reconciler.getGHApiURL(ctx)
+			Expect(url).To(BeEmpty())
+		})
+	})
+
 	Context("buildConsolePlugin", func() {
 		It("should build a ConsolePlugin with correct structure", func() {
 			cp := reconciler.buildConsolePlugin()
@@ -214,11 +246,26 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			Expect(svc["namespace"]).To(Equal(operatorNamespace))
 			Expect(svc["port"]).To(Equal(consolePluginPort))
 		})
+
+		It("should include authorization UserToken in proxy", func() {
+			cp := reconciler.buildConsolePlugin()
+			spec, ok := cp.Object["spec"].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+
+			proxy, ok := spec["proxy"].([]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(proxy).To(HaveLen(1))
+
+			proxyEntry, ok := proxy[0].(map[string]interface{})
+			Expect(ok).To(BeTrue())
+			Expect(proxyEntry["alias"]).To(Equal("backend"))
+			Expect(proxyEntry["authorization"]).To(Equal("UserToken"))
+		})
 	})
 
 	Context("buildDeployment", func() {
 		It("should build a Deployment with the correct image and args", func() {
-			deploy := reconciler.buildDeployment(testAPIServerURL)
+			deploy := reconciler.buildDeployment(testAPIServerURL, "")
 			Expect(deploy.Name).To(Equal(consolePluginName))
 			Expect(deploy.Namespace).To(Equal(operatorNamespace))
 			Expect(*deploy.Spec.Replicas).To(Equal(int32(2)))
@@ -228,9 +275,46 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			Expect(container.Image).To(Equal(testImage))
 			Expect(container.Args).To(ContainElement("--https-port=9443"))
 			Expect(container.Args).To(ContainElement("--external-api-server-url=" + testAPIServerURL))
+			Expect(container.Args).NotTo(ContainElement(ContainSubstring("--gh-api-url")))
 
 			Expect(deploy.Spec.Template.Spec.ServiceAccountName).To(Equal(consolePluginName))
 			Expect(deploy.Spec.Template.Spec.Volumes[0].Secret.SecretName).To(Equal(consolePluginCertSecret))
+		})
+
+		It("should include liveness and readiness probes", func() {
+			deploy := reconciler.buildDeployment(testAPIServerURL, "")
+			container := deploy.Spec.Template.Spec.Containers[0]
+
+			expectedPort := intstr.FromInt32(consolePluginPortInt32)
+
+			Expect(container.LivenessProbe).NotTo(BeNil())
+			Expect(container.LivenessProbe.HTTPGet).NotTo(BeNil())
+			Expect(container.LivenessProbe.HTTPGet.Path).To(Equal("/healthz"))
+			Expect(container.LivenessProbe.HTTPGet.Port).To(Equal(expectedPort))
+			Expect(container.LivenessProbe.HTTPGet.Scheme).To(Equal(v1.URISchemeHTTPS))
+			Expect(container.LivenessProbe.InitialDelaySeconds).To(Equal(int32(5)))
+			Expect(container.LivenessProbe.PeriodSeconds).To(Equal(int32(10)))
+
+			Expect(container.ReadinessProbe).NotTo(BeNil())
+			Expect(container.ReadinessProbe.HTTPGet).NotTo(BeNil())
+			Expect(container.ReadinessProbe.HTTPGet.Path).To(Equal("/healthz"))
+			Expect(container.ReadinessProbe.HTTPGet.Port).To(Equal(expectedPort))
+			Expect(container.ReadinessProbe.HTTPGet.Scheme).To(Equal(v1.URISchemeHTTPS))
+			Expect(container.ReadinessProbe.InitialDelaySeconds).To(Equal(int32(5)))
+			Expect(container.ReadinessProbe.PeriodSeconds).To(Equal(int32(10)))
+		})
+
+		It("should include --gh-api-url arg when ghApiURL is provided", func() {
+			ghURL := "https://github.example.com/api/v3"
+			deploy := reconciler.buildDeployment(testAPIServerURL, ghURL)
+			container := deploy.Spec.Template.Spec.Containers[0]
+			Expect(container.Args).To(ContainElement("--gh-api-url=" + ghURL))
+		})
+
+		It("should not include --gh-api-url arg when ghApiURL is empty", func() {
+			deploy := reconciler.buildDeployment(testAPIServerURL, "")
+			container := deploy.Spec.Template.Spec.Containers[0]
+			Expect(container.Args).NotTo(ContainElement(ContainSubstring("--gh-api-url")))
 		})
 	})
 
@@ -332,6 +416,34 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			deploy, err := getDeployment()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(deploy.Spec.Template.Spec.Containers[0].Image).To(Equal(testImage))
+		})
+
+		It("should pass --gh-api-url to deployment when ghApiUrl is in ConfigMap", func() {
+			createConfigMap(map[string]string{
+				consolePluginConfigKey: "true",
+				"ghApiUrl":             "https://gh.example.com/api/v3",
+			})
+
+			result, err := doReconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(reconcile.Result{}))
+
+			deploy, err := getDeployment()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deploy.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--gh-api-url=https://gh.example.com/api/v3"))
+		})
+
+		It("should not pass --gh-api-url when ghApiUrl is not set", func() {
+			createConfigMap(map[string]string{consolePluginConfigKey: "true"})
+			GinkgoT().Setenv("GH_API_URL", "")
+
+			result, err := doReconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(reconcile.Result{}))
+
+			deploy, err := getDeployment()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deploy.Spec.Template.Spec.Containers[0].Args).NotTo(ContainElement(ContainSubstring("--gh-api-url")))
 		})
 
 		It("should not create resources when key is absent", func() {

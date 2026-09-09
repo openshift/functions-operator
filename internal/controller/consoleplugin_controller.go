@@ -19,6 +19,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"os"
 	"strconv"
 
 	appsv1 "k8s.io/api/apps/v1"
@@ -93,6 +94,8 @@ func (r *ConsolePluginReconciler) Reconcile(ctx context.Context, _ ctrl.Request)
 			return ctrl.Result{}, err
 		}
 
+		ghApiURL := r.getGHApiURL(ctx)
+
 		if err := r.ensureServiceAccount(ctx); err != nil {
 			logger.Error(err, "Failed to ensure ServiceAccount")
 			return ctrl.Result{}, err
@@ -101,7 +104,7 @@ func (r *ConsolePluginReconciler) Reconcile(ctx context.Context, _ ctrl.Request)
 			logger.Error(err, "Failed to ensure Service")
 			return ctrl.Result{}, err
 		}
-		if err := r.ensureDeployment(ctx, apiServerURL); err != nil {
+		if err := r.ensureDeployment(ctx, apiServerURL, ghApiURL); err != nil {
 			logger.Error(err, "Failed to ensure Deployment")
 			return ctrl.Result{}, err
 		}
@@ -173,6 +176,19 @@ func (r *ConsolePluginReconciler) getAPIServerURL(ctx context.Context) (string, 
 	}
 
 	return apiServerURL, nil
+}
+
+func (r *ConsolePluginReconciler) getGHApiURL(ctx context.Context) string {
+	cm := &v1.ConfigMap{}
+	err := r.Get(ctx, types.NamespacedName{Namespace: r.OperatorNamespace, Name: controllerConfigName}, cm)
+	if err != nil {
+		return ""
+	}
+	if val, ok := cm.Data["ghApiUrl"]; ok && val != "" {
+		return val
+	}
+	// Fall back to GH_API_URL environment variable
+	return os.Getenv("GH_API_URL")
 }
 
 func (r *ConsolePluginReconciler) resolveOLMOwnership(ctx context.Context) error {
@@ -369,7 +385,15 @@ func (r *ConsolePluginReconciler) buildService() *v1.Service {
 	}
 }
 
-func (r *ConsolePluginReconciler) buildDeployment(apiServerURL string) *appsv1.Deployment {
+func (r *ConsolePluginReconciler) buildDeployment(apiServerURL, ghApiURL string) *appsv1.Deployment {
+	args := []string{
+		"--https-port=9443",
+		fmt.Sprintf("--external-api-server-url=%s", apiServerURL),
+	}
+	if ghApiURL != "" {
+		args = append(args, fmt.Sprintf("--gh-api-url=%s", ghApiURL))
+	}
+
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      consolePluginName,
@@ -407,15 +431,34 @@ func (r *ConsolePluginReconciler) buildDeployment(apiServerURL string) *appsv1.D
 							Name:            consolePluginName,
 							Image:           r.ConsolePluginImage,
 							ImagePullPolicy: v1.PullIfNotPresent,
-							Args: []string{
-								"--https-port=9443",
-								fmt.Sprintf("--external-api-server-url=%s", apiServerURL),
-							},
+							Args:            args,
 							Ports: []v1.ContainerPort{
 								{
 									ContainerPort: consolePluginPortInt32,
 									Protocol:      v1.ProtocolTCP,
 								},
+							},
+							LivenessProbe: &v1.Probe{
+								ProbeHandler: v1.ProbeHandler{
+									HTTPGet: &v1.HTTPGetAction{
+										Path:   "/healthz",
+										Port:   intstr.FromInt32(consolePluginPortInt32),
+										Scheme: v1.URISchemeHTTPS,
+									},
+								},
+								InitialDelaySeconds: 5,
+								PeriodSeconds:       10,
+							},
+							ReadinessProbe: &v1.Probe{
+								ProbeHandler: v1.ProbeHandler{
+									HTTPGet: &v1.HTTPGetAction{
+										Path:   "/healthz",
+										Port:   intstr.FromInt32(consolePluginPortInt32),
+										Scheme: v1.URISchemeHTTPS,
+									},
+								},
+								InitialDelaySeconds: 5,
+								PeriodSeconds:       10,
 							},
 							Resources: v1.ResourceRequirements{
 								Requests: v1.ResourceList{
@@ -478,7 +521,8 @@ func (r *ConsolePluginReconciler) buildConsolePlugin() *unstructured.Unstructure
 		},
 		"proxy": []interface{}{
 			map[string]interface{}{
-				"alias": "backend",
+				"alias":         "backend",
+				"authorization": "UserToken",
 				"endpoint": map[string]interface{}{
 					"type": "Service",
 					"service": map[string]interface{}{
@@ -540,9 +584,9 @@ func (r *ConsolePluginReconciler) ensureService(ctx context.Context) error {
 	return r.Update(ctx, existing)
 }
 
-func (r *ConsolePluginReconciler) ensureDeployment(ctx context.Context, apiServerURL string) error {
+func (r *ConsolePluginReconciler) ensureDeployment(ctx context.Context, apiServerURL, ghApiURL string) error {
 	logger := log.FromContext(ctx)
-	desired := r.buildDeployment(apiServerURL)
+	desired := r.buildDeployment(apiServerURL, ghApiURL)
 	ensureOwnerRef(desired, r.deploymentOwnerRef)
 
 	existing := &appsv1.Deployment{}

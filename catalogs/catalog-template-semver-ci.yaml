@@ -1,0 +1,6 @@
+Schema: olm.semver
+GenerateMajorChannels: true
+GenerateMinorChannels: false
+Candidate:
+  Bundles:
+  - Image: quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-operator-bundle-ci@sha256:51a4a7c68fdfd78ed2833e6a44a98def7904c211e790889abaed89533b407a71

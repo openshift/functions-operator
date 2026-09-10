@@ -8,8 +8,8 @@ metadata:
     pipelinesascode.tekton.dev/cancel-in-progress: "false"
     pipelinesascode.tekton.dev/max-keep-runs: "3"
     pipelinesascode.tekton.dev/on-cel-expression: event == "push" && target_branch
-      == "bundle-main" && ( "./catalogs/***".pathChanged() || ".tekton/serverless-functions-fbc-422-ci-push.yaml".pathChanged()
-      || "v4.22/Dockerfile.catalog".pathChanged() )
+      == "bundle-main" && ( "catalogs/catalog-template-semver-ci.yaml".pathChanged() || ".tekton/serverless-functions-fbc-422-ci-push.yaml".pathChanged()
+      || "catalogs/v4.22/Dockerfile.catalog".pathChanged() )
   labels:
     appstudio.openshift.io/application: serverless-functions-fbc-422-ci
     appstudio.openshift.io/component: serverless-functions-fbc-422-ci
@@ -27,6 +27,9 @@ spec:
   - name: build-platforms
     value:
     - linux/x86_64
+    - linux/arm64
+    - linux/s390x
+    - linux/ppc64le
   - name: dockerfile
     value: v4.22/Dockerfile.catalog
   - name: path-context
@@ -210,7 +213,12 @@ spec:
       - name: ociArtifactExpiresAfter
         value: $(params.image-expires-after)
       - name: OPM_ARGS
-        value: []
+        value:
+        - alpha
+        - render-template
+        - semver
+        - "catalogs/catalog-template-semver-ci.yaml"
+        - "--migrate-level=bundle-object-to-csv-metadata"
       - name: OPM_OUTPUT_PATH
         value: ""
       - name: IDMS_PATH

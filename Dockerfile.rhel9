@@ -57,6 +57,7 @@ LABEL name="openshift-serverless-tech-preview/functions-rhel9-operator" \
       io.k8s.display-name="OpenShift Serverless Functions operator" \
       io.k8s.description="Manages the lifecycle of the OpenShift Serverless Functions components" \
       io.openshift.tags="openshift,serverless,functions,operator" \
-      maintainer="serverless-support@redhat.com"
+      maintainer="serverless-support@redhat.com" \
+      cpe="cpe:/a:redhat:openshift_serverless:2.0::el9"
 
 ENTRYPOINT ["/manager"]

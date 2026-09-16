@@ -46,6 +46,7 @@ LABEL name="openshift-serverless-tech-preview/objectbucket-notifications-adapter
       io.k8s.display-name="OpenShift Serverless Functions ObjectBucket Source container" \
       io.k8s.description="Provides an integration with OpenShift Data Foundation bucket notifications" \
       io.openshift.tags="openshift,serverless,functions,objectbucket,bucket,source" \
-      maintainer="serverless-support@redhat.com"
+      maintainer="serverless-support@redhat.com" \
+      cpe="cpe:/a:redhat:openshift_serverless:2.0::el9"
 
 ENTRYPOINT ["/manager"]

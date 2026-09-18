@@ -61,7 +61,6 @@ func EnsureDefaultConfigMap(ctx context.Context, namespace string) error {
 		},
 		Data: map[string]string{
 			"autoUpdateMiddleware": defaultAutoUpdateMiddleware,
-			consolePluginConfigKey: "true",
 		},
 	}
 

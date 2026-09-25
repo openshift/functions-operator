@@ -224,8 +224,10 @@ spec:
         - "--migrate-level=bundle-object-to-csv-metadata"
       - name: OPM_OUTPUT_PATH
         value: "catalogs/v4.22/catalog/serverless-functions/catalog.json"
+      - name: FILE_TO_UPDATE_PULLSPEC
+        value: "catalogs/v4.22/catalog/serverless-functions/catalog.json"
       - name: IDMS_PATH
-        value: ""
+        value: ".tekton/images-mirror-set.yaml"
       runAfter:
       - fbc-inject-lifecycle
       taskRef:

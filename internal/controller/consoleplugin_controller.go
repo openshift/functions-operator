@@ -56,6 +56,10 @@ const (
 	infrastructureAPIVersion = "config.openshift.io/v1"
 	infrastructureKind       = "Infrastructure"
 	infrastructureName       = "cluster"
+
+	clusterVersionAPIVersion = "config.openshift.io/v1"
+	clusterVersionKind       = "ClusterVersion"
+	clusterVersionName       = "version"
 )
 
 // ConsolePluginReconciler reconciles the faas-console-plugin resources
@@ -94,6 +98,12 @@ func (r *ConsolePluginReconciler) Reconcile(ctx context.Context, _ ctrl.Request)
 			return ctrl.Result{}, err
 		}
 
+		clusterID, err := r.getClusterID(ctx)
+		if err != nil {
+			logger.Error(err, "Failed to get cluster ID from ClusterVersion CR")
+			return ctrl.Result{}, err
+		}
+
 		ghApiURL := r.getGHApiURL(ctx)
 
 		if err := r.ensureServiceAccount(ctx); err != nil {
@@ -104,7 +114,7 @@ func (r *ConsolePluginReconciler) Reconcile(ctx context.Context, _ ctrl.Request)
 			logger.Error(err, "Failed to ensure Service")
 			return ctrl.Result{}, err
 		}
-		if err := r.ensureDeployment(ctx, apiServerURL, ghApiURL); err != nil {
+		if err := r.ensureDeployment(ctx, apiServerURL, clusterID, ghApiURL); err != nil {
 			logger.Error(err, "Failed to ensure Deployment")
 			return ctrl.Result{}, err
 		}
@@ -176,6 +186,29 @@ func (r *ConsolePluginReconciler) getAPIServerURL(ctx context.Context) (string, 
 	}
 
 	return apiServerURL, nil
+}
+
+func (r *ConsolePluginReconciler) getClusterID(ctx context.Context) (string, error) {
+	cv := &unstructured.Unstructured{}
+	cv.SetAPIVersion(clusterVersionAPIVersion)
+	cv.SetKind(clusterVersionKind)
+
+	err := r.Get(ctx, types.NamespacedName{Name: clusterVersionName}, cv)
+	if err != nil {
+		return "", fmt.Errorf("failed to get ClusterVersion CR: %w", err)
+	}
+
+	spec, ok := cv.Object["spec"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("ClusterVersion CR has no spec")
+	}
+
+	clusterID, ok := spec["clusterID"].(string)
+	if !ok || clusterID == "" {
+		return "", fmt.Errorf("ClusterVersion CR has no clusterID in spec")
+	}
+
+	return clusterID, nil
 }
 
 func (r *ConsolePluginReconciler) getGHApiURL(ctx context.Context) string {
@@ -385,10 +418,11 @@ func (r *ConsolePluginReconciler) buildService() *v1.Service {
 	}
 }
 
-func (r *ConsolePluginReconciler) buildDeployment(apiServerURL, ghApiURL string) *appsv1.Deployment {
+func (r *ConsolePluginReconciler) buildDeployment(apiServerURL, clusterID, ghApiURL string) *appsv1.Deployment {
 	args := []string{
 		"--https-port=9443",
 		fmt.Sprintf("--external-api-server-url=%s", apiServerURL),
+		fmt.Sprintf("--cluster-id=%s", clusterID),
 	}
 	if ghApiURL != "" {
 		args = append(args, fmt.Sprintf("--gh-api-url=%s", ghApiURL))
@@ -584,9 +618,9 @@ func (r *ConsolePluginReconciler) ensureService(ctx context.Context) error {
 	return r.Update(ctx, existing)
 }
 
-func (r *ConsolePluginReconciler) ensureDeployment(ctx context.Context, apiServerURL, ghApiURL string) error {
+func (r *ConsolePluginReconciler) ensureDeployment(ctx context.Context, apiServerURL, clusterID, ghApiURL string) error {
 	logger := log.FromContext(ctx)
-	desired := r.buildDeployment(apiServerURL, ghApiURL)
+	desired := r.buildDeployment(apiServerURL, clusterID, ghApiURL)
 	ensureOwnerRef(desired, r.deploymentOwnerRef)
 
 	existing := &appsv1.Deployment{}

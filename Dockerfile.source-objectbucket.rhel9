@@ -1,5 +1,5 @@
 # Build the manager binary
-ARG GO_BUILDER=registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.26-openshift-5.0@sha256:6cb4b5f92fd87cf225a099e12f6a370db6086c578ddb4156e15c3173645a2c61
+ARG GO_BUILDER=registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.26-openshift-5.0@sha256:5d5b5c899907db91895312a1298f22cc5e3a2e71d6fb1922c3f22f95368288c6
 ARG GO_RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal@sha256:8ebe2ad8fdf3cab3e5a53c1edc69194c98209cfadab24b884f4ad9ebcf7bbbfc
 
 FROM $GO_BUILDER AS builder

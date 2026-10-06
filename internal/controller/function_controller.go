@@ -193,7 +193,7 @@ func (r *FunctionReconciler) prepareSource(ctx context.Context, function *v1alph
 		}
 	}
 
-	repo, err := r.GitManager.CloneRepository(ctx, function.Spec.Repository.URL, function.Spec.Repository.Path, function.Spec.Repository.Branch, gitAuthSecret.Data)
+	repo, err := r.GitManager.CloneRepository(ctx, function.Spec.Repository.URL, function.Spec.Repository.Dir, function.Spec.Repository.Revision, gitAuthSecret.Data)
 	if err != nil {
 		function.MarkSourceNotReady("GitCloneFailed", "Failed to clone repository: %s", err.Error())
 		return nil, nil, fmt.Errorf("failed to setup git repository: %w", err)
@@ -208,7 +208,7 @@ func (r *FunctionReconciler) prepareSource(ctx context.Context, function *v1alph
 	// Source is ready - git clone and metadata read succeeded
 	function.MarkSourceReady()
 
-	function.Status.Git.ResolvedBranch = repo.Branch
+	function.Status.Git.ResolvedRevision = repo.Revision
 	function.Status.Git.ObservedCommit = repo.Commit
 	function.Status.Git.LastChecked = metav1.Now()
 

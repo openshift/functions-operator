@@ -22,14 +22,14 @@ Defined in `api/v1alpha1/function_types.go`. A `Function` resource represents a 
 
 **Spec** (user-provided):
 - `repository.url` — Git repository containing the function source
-- `repository.branch` — Branch to track (optional, defaults to repo default)
-- `repository.path` — Subdirectory within the repo (for monorepos)
+- `repository.revision` — Branch name or full ref to build (optional, defaults to the repo's default branch)
+- `repository.dir` — Directory within the repo that holds the function (for monorepos)
 - `repository.authSecretRef` — Secret for private repo authentication
 - `registry.authSecretRef` — Secret for container registry authentication
 - `autoUpdateMiddleware` — Override operator default (optional)
 
 **Status** (operator-managed):
-- `git` — Resolved branch, observed commit, last check time
+- `git` — Resolved revision, observed commit, last check time
 - `deployment` — Current image, build time, deployer, runtime
 - `middleware` — Current/available versions, auto-update config, rebuild state
 - `service` — URL and readiness of the underlying Knative Service

@@ -7,11 +7,14 @@ metadata:
   name: function-sample
   namespace: default
 spec:
-  source:
-    repositoryUrl: https://github.com/your-org/your-function.git
+  repository:
+    url: https://github.com/your-org/your-function.git
+    # optional: branch name or full ref (e.g. refs/tags/v1.0.0); defaults to the default branch
+    revision: main
+    # optional: directory holding the function's func.yaml; defaults to the repository root
+    dir: .
     authSecretRef:
       name: git-credentials
   registry:
-    path: quay.io/your-username/my-function
     authSecretRef:
       name: registry-credentials

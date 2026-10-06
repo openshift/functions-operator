@@ -56,15 +56,17 @@ type FunctionSpecRepository struct {
 	URL string `json:"url"`
 
 	// +kubebuilder:validation:Optional
-	// Branch of the repository
-	Branch string `json:"branch,omitempty"`
+	// Revision of the repository to build: a branch name or a full ref such as refs/tags/v1.0.0.
+	// Defaults to the repository's default branch.
+	Revision string `json:"revision,omitempty"`
 
 	// AuthSecretRef defines the reference to the auth secret in case the repository is private and needs authentication
 	AuthSecretRef *v1.LocalObjectReference `json:"authSecretRef,omitempty"`
 
 	// +kubebuilder:validation:Optional
-	// Path points to the function inside the repository. Defaults to "."
-	Path string `json:"path,omitempty"`
+	// Dir is the directory within the repository that holds the function (its func.yaml).
+	// Defaults to the repository root.
+	Dir string `json:"dir,omitempty"`
 }
 
 type FunctionSpecRegistry struct {
@@ -92,9 +94,11 @@ type FunctionStatusHistoryEntry struct {
 }
 
 type FunctionStatusGit struct {
-	ResolvedBranch string      `json:"resolvedBranch,omitempty"`
-	ObservedCommit string      `json:"observedCommit,omitempty"`
-	LastChecked    metav1.Time `json:"lastChecked,omitempty"`
+	// ResolvedRevision is the revision that was checked out: spec.repository.revision,
+	// or the name of the default branch when that is empty.
+	ResolvedRevision string      `json:"resolvedRevision,omitempty"`
+	ObservedCommit   string      `json:"observedCommit,omitempty"`
+	LastChecked      metav1.Time `json:"lastChecked,omitempty"`
 }
 
 type FunctionStatusDeployment struct {

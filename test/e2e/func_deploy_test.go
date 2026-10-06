@@ -310,8 +310,8 @@ var _ = Describe("Operator", func() {
 				},
 				Spec: functionsdevv1alpha1.FunctionSpec{
 					Repository: functionsdevv1alpha1.FunctionSpecRepository{
-						URL:  repoURL,
-						Path: subPath,
+						URL: repoURL,
+						Dir: subPath,
 					},
 				},
 			}

@@ -9,7 +9,7 @@ type Repository struct {
 	CloneDir      string
 	SubPath       string
 	Commit        string
-	Branch        string
+	Revision      string
 	knownHostFile string
 }
 

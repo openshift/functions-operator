@@ -1,0 +1,49 @@
+version: 2
+updates:
+  # Enable version updates for Go modules
+  - package-ecosystem: "gomod"
+    # api/ is a separate Go module with its own go.mod
+    directories:
+      - "/"
+      - "/api"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      kubernetes:
+        patterns:
+          - "k8s.io/*"
+          - "sigs.k8s.io/*"
+    ignore:
+      # Pinned to a commit on func's main branch for the git-source API
+      # (knative/func#4064), which no func release contains yet. Release-branch
+      # tags such as v0.50.3 sort higher but lack it, so updates would break the
+      # build. Remove once a func release includes #4064.
+      - dependency-name: "knative.dev/func"
+
+  # Enable version updates for GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    commit-message:
+      prefix: "chore github-actions"
+      include: "scope"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # Enable version updates for Docker
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "daily"
+    commit-message:
+      prefix: "chore docker"
+      include: "scope"

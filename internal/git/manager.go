@@ -81,11 +81,17 @@ func (m *managerImpl) CloneRepository(ctx context.Context, repoUrl, subPath, ref
 		return nil, fmt.Errorf("failed to find head: %w", err)
 	}
 
+	// An empty reference clones the remote's default branch: report its name.
+	revision := reference
+	if revision == "" && head.Name().IsBranch() {
+		revision = head.Name().Short()
+	}
+
 	return &Repository{
 		CloneDir:      targetDir,
 		SubPath:       subPath,
 		Commit:        head.Hash().String(),
-		Branch:        reference,
+		Revision:      revision,
 		knownHostFile: tempFile,
 	}, nil
 }

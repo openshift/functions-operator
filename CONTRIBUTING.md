@@ -100,6 +100,14 @@ This runs three sub-targets:
 - `manifests` — CRDs, ClusterRoles, and webhook configurations
 - `gen-mocks` — Mock implementations via [mockery](https://github.com/vektra/mockery)
 
+## Go Modules
+
+`api/` is a separate Go module (`github.com/functions-dev/func-operator/api`), so other projects such as knative/func can import the CRD types without pulling in the operator's dependencies.
+
+- The root `go.mod` requires it and points it at the local folder with `replace github.com/functions-dev/func-operator/api => ./api`, so the operator always builds against the types in the same commit.
+- `./...` from the repository root does not include `api/`. The `fmt`, `vet`, `test` and `lint` make targets run a second time inside `api/`; do the same when running Go commands by hand, e.g. `cd api && go mod tidy`.
+- Other projects use released versions of the module, tagged with an `api/` prefix (e.g. `api/v0.4.0`).
+
 ## Testing
 
 ### Unit Tests

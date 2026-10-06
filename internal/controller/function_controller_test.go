@@ -58,8 +58,8 @@ var _ = Describe("Function Controller", func() {
 
 		defaultSpec := functionsdevv1alpha1.FunctionSpec{
 			Repository: functionsdevv1alpha1.FunctionSpecRepository{
-				URL:    "https://github.com/foo/bar",
-				Branch: "my-branch",
+				URL:      "https://github.com/foo/bar",
+				Revision: "my-branch",
 			},
 		}
 
@@ -177,7 +177,7 @@ var _ = Describe("Function Controller", func() {
 					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
 				},
 			}),
-			Entry("should use main as default branch", reconcileTestCase{
+			Entry("should clone the default branch when no revision is set", reconcileTestCase{
 				spec: functionsdevv1alpha1.FunctionSpec{
 					Repository: functionsdevv1alpha1.FunctionSpecRepository{
 						URL: "https://github.com/foo/bar",
@@ -191,15 +191,19 @@ var _ = Describe("Function Controller", func() {
 					}, nil)
 					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
 
-					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+					// an empty revision clones the remote's default branch, which the git manager reports back
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}, WithRepoOptionRevision("trunk")), nil)
+				},
+				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
+					Expect(status.Git.ResolvedRevision).Should(Equal("trunk"))
 				},
 			}),
 
 			Entry("should contain the git information in the status", reconcileTestCase{
 				spec: functionsdevv1alpha1.FunctionSpec{
 					Repository: functionsdevv1alpha1.FunctionSpecRepository{
-						URL:    "https://github.com/foo/bar",
-						Branch: "my-branch",
+						URL:      "https://github.com/foo/bar",
+						Revision: "my-branch",
 					},
 				},
 				configureMocks: func(funcMock *funccli.MockManager, gitMock *git.MockManager) {
@@ -210,10 +214,10 @@ var _ = Describe("Function Controller", func() {
 					}, nil)
 					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
 
-					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}, WithRepoOptionBranch("my-branch"), WithRepoOptionCommit("foobar")), nil)
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "my-branch", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}, WithRepoOptionRevision("my-branch"), WithRepoOptionCommit("foobar")), nil)
 				},
 				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
-					Expect(status.Git.ResolvedBranch).Should(Equal("my-branch"))
+					Expect(status.Git.ResolvedRevision).Should(Equal("my-branch"))
 					Expect(status.Git.ObservedCommit).Should(Equal("foobar"))
 				},
 			}),
@@ -233,7 +237,7 @@ var _ = Describe("Function Controller", func() {
 					}, nil)
 					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v1.0.0", nil)
 
-					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "", mock.Anything).Return(createTmpGitRepo(functions.Function{
 						Name:    "func-go",
 						Runtime: "node",
 						Deploy: functions.DeploySpec{
@@ -265,7 +269,7 @@ var _ = Describe("Function Controller", func() {
 
 					// no funcMock.EXPECT().Deploy call, as no redeploy expected!
 
-					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
 				},
 				operatorConfig: map[string]string{
 					"autoUpdateMiddleware": "false",
@@ -289,7 +293,7 @@ var _ = Describe("Function Controller", func() {
 
 					// no funcMock.EXPECT().Deploy call, as no redeploy expected!
 
-					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
 				},
 				operatorConfig: map[string]string{
 					"autoUpdateMiddleware": "true",
@@ -312,7 +316,7 @@ var _ = Describe("Function Controller", func() {
 					}, nil)
 					funcMock.EXPECT().GetLatestMiddlewareVersion(mock.Anything, mock.Anything, mock.Anything).Return("v2.0.0", nil)
 
-					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "main", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
+					gitMock.EXPECT().CloneRepository(mock.Anything, "https://github.com/foo/bar", "", "", mock.Anything).Return(createTmpGitRepo(functions.Function{Name: "func-go"}), nil)
 				},
 				statusChecks: func(status *functionsdevv1alpha1.FunctionStatus) {
 					Expect(status.Middleware.Current).Should(Equal("v2.0.0"))
@@ -551,8 +555,8 @@ var _ = Describe("Function Controller", func() {
 			By("Creating the Function with registry authSecretRef")
 			spec := functionsdevv1alpha1.FunctionSpec{
 				Repository: functionsdevv1alpha1.FunctionSpecRepository{
-					URL:    "https://github.com/foo/bar",
-					Branch: "my-branch",
+					URL:      "https://github.com/foo/bar",
+					Revision: "my-branch",
 				},
 				Registry: functionsdevv1alpha1.FunctionSpecRegistry{
 					AuthSecretRef: &v1.LocalObjectReference{
@@ -661,9 +665,9 @@ func WithRepoOptionSubPath(subPath string) RepoOption {
 	}
 }
 
-func WithRepoOptionBranch(branch string) RepoOption {
+func WithRepoOptionRevision(revision string) RepoOption {
 	return func(repo *git.Repository) {
-		repo.Branch = branch
+		repo.Revision = revision
 	}
 }
 

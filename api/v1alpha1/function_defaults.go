@@ -23,10 +23,6 @@ func (r *FunctionSpecRepository) SetDefaults(ctx context.Context) {
 	if r == nil {
 		return
 	}
-
-	if r.Branch == "" {
-		r.Branch = "main"
-	}
 }
 
 func (r *FunctionSpecRegistry) SetDefaults(ctx context.Context) {

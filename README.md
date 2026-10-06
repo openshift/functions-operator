@@ -204,7 +204,7 @@ kubectl get func my-function -o yaml
 
 The status will include:
 - Function name and conditions
-- Git information (branch, commit, last checked time)
+- Git information (revision, commit, last checked time)
 - Deployment details (image, runtime, build time, deployer)
 - Middleware status (current and available versions, auto-update settings, pending rebuild status)
 - Service status (URL and readiness)
@@ -213,7 +213,7 @@ The status will include:
 
 ### Functions in Monorepos
 
-For functions located in a subdirectory of a repository (e.g., in a monorepo), use the `repository.path` field to specify the path to your function:
+For functions located in a subdirectory of a repository (e.g., in a monorepo), use the `repository.dir` field to specify the directory that holds your function:
 
 ```yaml
 apiVersion: functions.dev/v1alpha1
@@ -224,7 +224,7 @@ metadata:
 spec:
   repository:
     url: https://github.com/your-org/your-monorepo.git
-    path: functions/my-function
+    dir: functions/my-function
     authSecretRef:
       name: git-credentials
   registry:
@@ -291,8 +291,8 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and contr
 | Field                       | Type    | Required | Description                                                                                      |
 |-----------------------------|---------|----------|--------------------------------------------------------------------------------------------------|
 | `repository.url`            | string  | Yes      | URL of the Git repository. Supports HTTPS, HTTP, SSH (`ssh://`), and SCP-style (`git@host:path`) |
-| `repository.branch`         | string  | No       | Branch of the repository                                                                         |
-| `repository.path`           | string  | No       | Path to the function inside the repository. Defaults to "."                                      |
+| `repository.revision`       | string  | No       | Revision to build: a branch name or a full ref such as `refs/tags/v1.0.0`. Defaults to the repository's default branch |
+| `repository.dir`            | string  | No       | Directory within the repository that holds the function (its `func.yaml`). Defaults to the repository root |
 | `repository.authSecretRef`  | object  | No       | Reference to the auth secret for private repository authentication                               |
 | `registry.authSecretRef`    | object  | No       | Reference to the secret containing credentials for registry authentication                       |
 | `autoUpdateMiddleware`      | boolean | No       | Defines if the operator should rebuild when outdated middleware is detected. When not specified, defaults to the operator-wide setting in the `func-operator-controller-config` ConfigMap (default: `true`). Function-level setting takes precedence over operator default |
@@ -303,7 +303,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and contr
 |-------|------|-------------|
 | `name` | string | Function name from metadata |
 | `conditions` | array | Status conditions (see below) |
-| `git.resolvedBranch` | string | Git branch that is being monitored |
+| `git.resolvedRevision` | string | Revision that was checked out: `repository.revision`, or the default branch name when that is empty |
 | `git.observedCommit` | string | Latest Git commit SHA observed |
 | `git.lastChecked` | timestamp | Last time the repository was checked |
 | `deployment.image` | string | Container image of the deployed function |

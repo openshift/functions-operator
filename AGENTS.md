@@ -21,7 +21,7 @@ Before committing, test locally following the table below:
 
 ## Project Structure
 
-- `api/v1alpha1/` - Function CRD types
+- `api/` - CRD types (`v1alpha1/` Function, `sources/v1alpha1/` ObjectBucketSource). A separate Go module (`api/go.mod`), so other projects such as knative/func can import the types without the operator's dependencies. The root `go.mod` points it at `./api` with a `replace`; `make fmt vet test lint` cover both modules
 - `internal/` - controller and business logic
 - `test/e2e/` - e2e tests using in-cluster Gitea
 - `test/utils/` - e2e test helpers (RepositoryProvider, func CLI wrappers)

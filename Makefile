@@ -108,17 +108,24 @@ manifests: controller-gen ## Generate WebhookConfiguration, ClusterRole and Cust
 generate: controller-gen ## Generate code containing DeepCopy, DeepCopyInto, and DeepCopyObject method implementations.
 	$(CONTROLLER_GEN) object:headerFile="hack/boilerplate.go.txt" paths="./..."
 
+# api/ is a separate Go module (see api/go.mod), so ./... from the repository
+# root does not include it. Go commands below run once more inside api/.
+# controller-gen (manifests, generate) crosses module boundaries on its own.
+
 .PHONY: fmt
 fmt: ## Run go fmt against code.
 	go fmt ./...
+	cd api && go fmt ./...
 
 .PHONY: vet
 vet: ## Run go vet against code.
 	go vet ./...
+	cd api && go vet ./...
 
 .PHONY: test
 test: manifests generate fmt vet setup-envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) --bin-dir $(LOCALBIN) -p path)" go test $$(go list ./... | grep -v e2e) -coverprofile cover.out
+	cd api && go test ./... -coverprofile cover.out
 
 .PHONY: test-e2e ## Run e2e tests.
 test-e2e: ginkgo
@@ -135,10 +142,12 @@ install-olm-in-cluster: operator-sdk ## Install OLM in cluster if not already in
 .PHONY: lint
 lint: golangci-lint ## Run golangci-lint linter
 	$(GOLANGCI_LINT) run
+	cd api && $(GOLANGCI_LINT) run --config ../.golangci.yml
 
 .PHONY: lint-fix
 lint-fix: golangci-lint ## Run golangci-lint linter and perform fixes
 	$(GOLANGCI_LINT) run --fix
+	cd api && $(GOLANGCI_LINT) run --fix --config ../.golangci.yml
 
 .PHONY: lint-config
 lint-config: golangci-lint ## Verify golangci-lint linter configuration

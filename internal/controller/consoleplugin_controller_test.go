@@ -36,6 +36,7 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		operatorNamespace = "test-consoleplugin-ns"
 		testImage         = "quay.io/test/faas-console-plugin:latest"
 		testAPIServerURL  = "https://api.test-cluster.example.com:6443"
+		testClusterID     = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
 	)
 
 	var (
@@ -69,6 +70,19 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			"apiServerURL": testAPIServerURL,
 		}
 		err = k8sClient.Create(ctx, infra)
+		if err != nil && !apierrors.IsAlreadyExists(err) {
+			Expect(err).NotTo(HaveOccurred())
+		}
+
+		// Create ClusterVersion CR for cluster ID
+		cv := &unstructured.Unstructured{}
+		cv.SetAPIVersion(clusterVersionAPIVersion)
+		cv.SetKind(clusterVersionKind)
+		cv.SetName(clusterVersionName)
+		cv.Object["spec"] = map[string]interface{}{
+			"clusterID": testClusterID,
+		}
+		err = k8sClient.Create(ctx, cv)
 		if err != nil && !apierrors.IsAlreadyExists(err) {
 			Expect(err).NotTo(HaveOccurred())
 		}
@@ -191,6 +205,14 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		})
 	})
 
+	Context("getClusterID", func() {
+		It("should return the cluster ID from ClusterVersion CR", func() {
+			id, err := reconciler.getClusterID(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(id).To(Equal(testClusterID))
+		})
+	})
+
 	Context("getGHApiURL", func() {
 		It("should return ghApiUrl from ConfigMap when set", func() {
 			createConfigMap(map[string]string{
@@ -265,7 +287,7 @@ var _ = Describe("ConsolePlugin Controller", func() {
 
 	Context("buildDeployment", func() {
 		It("should build a Deployment with the correct image and args", func() {
-			deploy := reconciler.buildDeployment(testAPIServerURL, "")
+			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, "")
 			Expect(deploy.Name).To(Equal(consolePluginName))
 			Expect(deploy.Namespace).To(Equal(operatorNamespace))
 			Expect(*deploy.Spec.Replicas).To(Equal(int32(2)))
@@ -275,6 +297,7 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			Expect(container.Image).To(Equal(testImage))
 			Expect(container.Args).To(ContainElement("--https-port=9443"))
 			Expect(container.Args).To(ContainElement("--external-api-server-url=" + testAPIServerURL))
+			Expect(container.Args).To(ContainElement("--cluster-id=" + testClusterID))
 			Expect(container.Args).NotTo(ContainElement(ContainSubstring("--gh-api-url")))
 
 			Expect(deploy.Spec.Template.Spec.ServiceAccountName).To(Equal(consolePluginName))
@@ -282,7 +305,7 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		})
 
 		It("should include liveness and readiness probes", func() {
-			deploy := reconciler.buildDeployment(testAPIServerURL, "")
+			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, "")
 			container := deploy.Spec.Template.Spec.Containers[0]
 
 			expectedPort := intstr.FromInt32(consolePluginPortInt32)
@@ -306,13 +329,13 @@ var _ = Describe("ConsolePlugin Controller", func() {
 
 		It("should include --gh-api-url arg when ghApiURL is provided", func() {
 			ghURL := "https://github.example.com/api/v3"
-			deploy := reconciler.buildDeployment(testAPIServerURL, ghURL)
+			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, ghURL)
 			container := deploy.Spec.Template.Spec.Containers[0]
 			Expect(container.Args).To(ContainElement("--gh-api-url=" + ghURL))
 		})
 
 		It("should not include --gh-api-url arg when ghApiURL is empty", func() {
-			deploy := reconciler.buildDeployment(testAPIServerURL, "")
+			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, "")
 			container := deploy.Spec.Template.Spec.Containers[0]
 			Expect(container.Args).NotTo(ContainElement(ContainSubstring("--gh-api-url")))
 		})

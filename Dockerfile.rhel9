@@ -3,7 +3,7 @@
 # pull it from that image instead of building it from source here.
 ARG FUNC_CLI_IMG=quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-func@sha256:9360b3f845a2cbb8bb9043db0d78d2fbd3a2bd29350029ecacf5baa0853b9c32
 
-ARG GO_BUILDER=registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.26-openshift-5.0@sha256:ec03dbe510b1b54889859aa83e6e7a6cd6a3f2d3ef11f48e9c519e436b23b2c8
+ARG GO_BUILDER=registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.26-openshift-5.0@sha256:60231dd8b856b97a1fd4ceb33904d3a941a34d322aafb1e79ff444fa90f9081e
 ARG GO_RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal@sha256:1d7c5517a4a1a8e2688620b39ee980e82505ca1ab7ae5541b5463120ae9b3897
 
 # Build the manager binary

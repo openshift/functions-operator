@@ -197,7 +197,7 @@ spec:
         value:
         - $(params.build-args[*])
       runAfter:
-      - clone-repository
+      - run-opm-command
       taskRef:
         params:
         - name: name
@@ -229,7 +229,7 @@ spec:
       - name: IDMS_PATH
         value: ".tekton/images-mirror-set.yaml"
       runAfter:
-      - fbc-inject-lifecycle
+      - clone-repository
       taskRef:
         params:
         - name: name
@@ -252,7 +252,7 @@ spec:
       - name: ociArtifactExpiresAfter
         value: $(params.image-expires-after)
       runAfter:
-      - run-opm-command
+      - fbc-inject-lifecycle
       taskRef:
         params:
         - name: name

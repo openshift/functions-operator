@@ -1,0 +1,118 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gitea
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gitea
+  namespace: gitea
+  labels:
+    app: gitea
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: gitea
+  template:
+    metadata:
+      labels:
+        app: gitea
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: gitea
+          # rootless image: runs as an arbitrary non-root UID (required by OCP restricted SCC)
+          image: docker.io/gitea/gitea:1.22-rootless
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: GITEA__security__INSTALL_LOCK
+              value: "true"
+            - name: GITEA__database__DB_TYPE
+              value: sqlite3
+            - name: GITEA__database__PATH
+              value: /var/lib/gitea/data/gitea.db
+            - name: GITEA__server__HTTP_PORT
+              value: "3000"
+            - name: GITEA__server__SSH_PORT
+              value: "2222"
+          ports:
+            - name: http
+              containerPort: 3000
+            - name: ssh
+              containerPort: 2222
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          readinessProbe:
+            httpGet:
+              path: /api/healthz
+              port: 3000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          # Create the admin user the test suite authenticates as (giteaadmin/giteapass).
+          # Idempotent: retries until Gitea is up, ignores "already exists".
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    for i in $(seq 1 30); do
+                      if gitea admin user create --admin \
+                          --username giteaadmin --password giteapass \
+                          --email admin@gitea.local --must-change-password=false; then
+                        exit 0
+                      fi
+                      sleep 5
+                    done
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/gitea
+            - name: config
+              mountPath: /etc/gitea
+      volumes:
+        - name: data
+          emptyDir: {}
+        - name: config
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: gitea
+  namespace: gitea
+  labels:
+    app: gitea
+spec:
+  selector:
+    app: gitea
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+    - name: ssh
+      port: 2222
+      targetPort: 2222
+---
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: gitea
+  namespace: gitea
+  labels:
+    app: gitea
+spec:
+  to:
+    kind: Service
+    name: gitea
+  port:
+    targetPort: http

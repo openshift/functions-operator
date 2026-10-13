@@ -101,12 +101,15 @@ spec:
                         type: string
                     type: object
                     x-kubernetes-map-type: atomic
-                  branch:
-                    description: Branch of the repository
+                  dir:
+                    description: |-
+                      Dir is the directory within the repository that holds the function (its func.yaml).
+                      Defaults to the repository root.
                     type: string
-                  path:
-                    description: Path points to the function inside the repository.
-                      Defaults to "."
+                  revision:
+                    description: |-
+                      Revision of the repository to build: a branch name or a full ref such as refs/tags/v1.0.0.
+                      Defaults to the repository's default branch.
                     type: string
                   url:
                     description: URL of the Git repository containing the function
@@ -196,7 +199,10 @@ spec:
                     type: string
                   observedCommit:
                     type: string
-                  resolvedBranch:
+                  resolvedRevision:
+                    description: |-
+                      ResolvedRevision is the revision that was checked out: spec.repository.revision,
+                      or the name of the default branch when that is empty.
                     type: string
                 type: object
               history:

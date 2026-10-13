@@ -29,7 +29,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-09-24T16:45:45Z"
+    createdAt: "2026-10-13T14:08:08Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.2+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/plugins: '["console-functions-plugin"]'
@@ -217,6 +217,17 @@ spec:
                 - patch
                 - update
                 - watch
+            - apiGroups:
+                - keda.sh
+              resources:
+                - scaledobjects
+                - triggerauthentications
+              verbs:
+                - create
+                - delete
+                - get
+                - list
+                - update
             - apiGroups:
                 - objectbucket.io
               resources:

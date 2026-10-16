@@ -431,7 +431,7 @@ spec:
                         valueFrom:
                           fieldRef:
                             fieldPath: metadata.namespace
-                    image: registry.redhat.io/openshift-serverless-tech-preview/functions-rhel9-operator@sha256:d85ba007dc3e5d132064d249fc9b23eb5ee56a8a7731c049c8898970e691f472
+                    image: registry.redhat.io/openshift-serverless-tech-preview/functions-rhel9-operator@sha256:5f1c6f7f9ffca4b02f402dab8f586fe0ac612eddfcc03ae9b10a9f09439fc0c4
                     imagePullPolicy: Always
                     livenessProbe:
                       httpGet:
@@ -650,7 +650,7 @@ spec:
   version: 2.0.1
   relatedImages:
     - name: func-operator
-      image: registry.redhat.io/openshift-serverless-tech-preview/functions-rhel9-operator@sha256:d85ba007dc3e5d132064d249fc9b23eb5ee56a8a7731c049c8898970e691f472
+      image: registry.redhat.io/openshift-serverless-tech-preview/functions-rhel9-operator@sha256:5f1c6f7f9ffca4b02f402dab8f586fe0ac612eddfcc03ae9b10a9f09439fc0c4
     - name: objectbucket-notifications-adapter
       image: registry.redhat.io/openshift-serverless-tech-preview/objectbucket-notifications-adapter-rhel9@sha256:c8c301acd8e585aaeff23e34833ef1af30097087370fee63d9af081fc62f8e5d
     - name: faas-console-plugin

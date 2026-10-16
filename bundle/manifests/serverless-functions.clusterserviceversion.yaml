@@ -418,7 +418,7 @@ spec:
                       - /manager
                     env:
                       - name: CONSOLE_PLUGIN_IMAGE
-                        value: registry.redhat.io/openshift-serverless-tech-preview/functions-console-plugin-rhel9@sha256:f2cd91e1b7cb662945ce1a5fd5cd5353739e193d2eebe339688842404a29b9e5
+                        value: registry.redhat.io/openshift-serverless-tech-preview/functions-console-plugin-rhel9@sha256:2115d3f67a3804e0a589d629fc8efc2eed6cd4374ec8a6e00343d60ce03dff4e
                       - name: POD_NAME
                         valueFrom:
                           fieldRef:
@@ -654,4 +654,4 @@ spec:
     - name: objectbucket-notifications-adapter
       image: registry.redhat.io/openshift-serverless-tech-preview/objectbucket-notifications-adapter-rhel9@sha256:e028c87796c4690d354e18395faa026f7e0229118a925a00b5f8798199ea5669
     - name: faas-console-plugin
-      image: registry.redhat.io/openshift-serverless-tech-preview/functions-console-plugin-rhel9@sha256:f2cd91e1b7cb662945ce1a5fd5cd5353739e193d2eebe339688842404a29b9e5
+      image: registry.redhat.io/openshift-serverless-tech-preview/functions-console-plugin-rhel9@sha256:2115d3f67a3804e0a589d629fc8efc2eed6cd4374ec8a6e00343d60ce03dff4e

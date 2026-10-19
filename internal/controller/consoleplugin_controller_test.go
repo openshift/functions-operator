@@ -281,6 +281,27 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			Expect(deploy.Spec.Template.Spec.Volumes[0].Secret.SecretName).To(Equal(consolePluginCertSecret))
 		})
 
+		// The plugin backend stores SCM credentials as Secrets in its own
+		// namespace. Nothing else tells it which namespace that is, so without
+		// this it falls back to a hardcoded default and writes to the wrong
+		// place, or nowhere.
+		It("should expose the pod namespace to the plugin", func() {
+			deploy := reconciler.buildDeployment(testAPIServerURL, "")
+			container := deploy.Spec.Template.Spec.Containers[0]
+
+			var podNamespace *v1.EnvVar
+			for i := range container.Env {
+				if container.Env[i].Name == "POD_NAMESPACE" {
+					podNamespace = &container.Env[i]
+				}
+			}
+
+			Expect(podNamespace).NotTo(BeNil(), "POD_NAMESPACE env var should be set")
+			Expect(podNamespace.ValueFrom).NotTo(BeNil())
+			Expect(podNamespace.ValueFrom.FieldRef).NotTo(BeNil())
+			Expect(podNamespace.ValueFrom.FieldRef.FieldPath).To(Equal("metadata.namespace"))
+		})
+
 		It("should include liveness and readiness probes", func() {
 			deploy := reconciler.buildDeployment(testAPIServerURL, "")
 			container := deploy.Spec.Template.Spec.Containers[0]

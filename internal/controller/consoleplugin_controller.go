@@ -432,6 +432,19 @@ func (r *ConsolePluginReconciler) buildDeployment(apiServerURL, ghApiURL string)
 							Image:           r.ConsolePluginImage,
 							ImagePullPolicy: v1.PullIfNotPresent,
 							Args:            args,
+							// The plugin backend keeps SCM credentials in Secrets
+							// in its own namespace, and has no other way to learn
+							// which namespace that is.
+							Env: []v1.EnvVar{
+								{
+									Name: "POD_NAMESPACE",
+									ValueFrom: &v1.EnvVarSource{
+										FieldRef: &v1.ObjectFieldSelector{
+											FieldPath: "metadata.namespace",
+										},
+									},
+								},
+							},
 							Ports: []v1.ContainerPort{
 								{
 									ContainerPort: consolePluginPortInt32,

@@ -100,6 +100,14 @@ func (r *ConsolePluginReconciler) Reconcile(ctx context.Context, _ ctrl.Request)
 			logger.Error(err, "Failed to ensure ServiceAccount")
 			return ctrl.Result{}, err
 		}
+		if err := r.ensureRole(ctx); err != nil {
+			logger.Error(err, "Failed to ensure Role")
+			return ctrl.Result{}, err
+		}
+		if err := r.ensureRoleBinding(ctx); err != nil {
+			logger.Error(err, "Failed to ensure RoleBinding")
+			return ctrl.Result{}, err
+		}
 		if err := r.ensureService(ctx); err != nil {
 			logger.Error(err, "Failed to ensure Service")
 			return ctrl.Result{}, err
@@ -124,6 +132,14 @@ func (r *ConsolePluginReconciler) Reconcile(ctx context.Context, _ ctrl.Request)
 		}
 		if err := r.deleteService(ctx); err != nil {
 			logger.Error(err, "Failed to delete Service")
+			return ctrl.Result{}, err
+		}
+		if err := r.deleteRoleBinding(ctx); err != nil {
+			logger.Error(err, "Failed to delete RoleBinding")
+			return ctrl.Result{}, err
+		}
+		if err := r.deleteRole(ctx); err != nil {
+			logger.Error(err, "Failed to delete Role")
 			return ctrl.Result{}, err
 		}
 		if err := r.deleteServiceAccount(ctx); err != nil {
@@ -360,6 +376,47 @@ func (r *ConsolePluginReconciler) buildServiceAccount() *v1.ServiceAccount {
 	}
 }
 
+// Faas console plugin keep SCM credentials in Secrets in its own
+// namespace.
+func (r *ConsolePluginReconciler) buildRole() *rbacv1.Role {
+	return &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      consolePluginName,
+			Namespace: r.OperatorNamespace,
+			Labels:    consolePluginLabels(),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{""},
+				Resources: []string{"secrets"},
+				Verbs:     []string{"create", "get", "update", "delete"},
+			},
+		},
+	}
+}
+
+func (r *ConsolePluginReconciler) buildRoleBinding() *rbacv1.RoleBinding {
+	return &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      consolePluginName,
+			Namespace: r.OperatorNamespace,
+			Labels:    consolePluginLabels(),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "Role",
+			Name:     consolePluginName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Name:      consolePluginName,
+				Namespace: r.OperatorNamespace,
+			},
+		},
+	}
+}
+
 func (r *ConsolePluginReconciler) buildService() *v1.Service {
 	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -559,6 +616,60 @@ func (r *ConsolePluginReconciler) ensureServiceAccount(ctx context.Context) erro
 	return r.Update(ctx, existing)
 }
 
+func (r *ConsolePluginReconciler) ensureRole(ctx context.Context) error {
+	logger := log.FromContext(ctx)
+	desired := r.buildRole()
+	ensureOwnerRef(desired, r.deploymentOwnerRef)
+
+	existing := &rbacv1.Role{}
+	err := r.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: r.OperatorNamespace}, existing)
+	if apierrors.IsNotFound(err) {
+		logger.Info("Creating Role", "name", consolePluginName)
+		return r.Create(ctx, desired)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get Role: %w", err)
+	}
+
+	existing.Labels = desired.Labels
+	existing.Rules = desired.Rules
+	ensureOwnerRef(existing, r.deploymentOwnerRef)
+	logger.Info("Updating Role", "name", consolePluginName)
+	return r.Update(ctx, existing)
+}
+
+func (r *ConsolePluginReconciler) ensureRoleBinding(ctx context.Context) error {
+	logger := log.FromContext(ctx)
+	desired := r.buildRoleBinding()
+	ensureOwnerRef(desired, r.deploymentOwnerRef)
+
+	existing := &rbacv1.RoleBinding{}
+	err := r.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: r.OperatorNamespace}, existing)
+	if apierrors.IsNotFound(err) {
+		logger.Info("Creating RoleBinding", "name", consolePluginName)
+		return r.Create(ctx, desired)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get RoleBinding: %w", err)
+	}
+
+	// RoleRef is immutable, so a changed one has to be replaced rather than
+	// updated in place.
+	if existing.RoleRef != desired.RoleRef {
+		logger.Info("Replacing RoleBinding with a changed roleRef", "name", consolePluginName)
+		if err := r.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete RoleBinding: %w", err)
+		}
+		return r.Create(ctx, desired)
+	}
+
+	existing.Labels = desired.Labels
+	existing.Subjects = desired.Subjects
+	ensureOwnerRef(existing, r.deploymentOwnerRef)
+	logger.Info("Updating RoleBinding", "name", consolePluginName)
+	return r.Update(ctx, existing)
+}
+
 func (r *ConsolePluginReconciler) ensureService(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 	desired := r.buildService()
@@ -692,6 +803,50 @@ func (r *ConsolePluginReconciler) deleteService(ctx context.Context) error {
 	}
 
 	logger.Info("Deleted Service", "name", consolePluginName)
+	return nil
+}
+
+func (r *ConsolePluginReconciler) deleteRoleBinding(ctx context.Context) error {
+	logger := log.FromContext(ctx)
+
+	rb := &rbacv1.RoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      consolePluginName,
+			Namespace: r.OperatorNamespace,
+		},
+	}
+
+	err := r.Delete(ctx, rb)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to delete RoleBinding: %w", err)
+	}
+
+	logger.Info("Deleted RoleBinding", "name", consolePluginName)
+	return nil
+}
+
+func (r *ConsolePluginReconciler) deleteRole(ctx context.Context) error {
+	logger := log.FromContext(ctx)
+
+	role := &rbacv1.Role{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      consolePluginName,
+			Namespace: r.OperatorNamespace,
+		},
+	}
+
+	err := r.Delete(ctx, role)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to delete Role: %w", err)
+	}
+
+	logger.Info("Deleted Role", "name", consolePluginName)
 	return nil
 }
 

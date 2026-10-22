@@ -23,6 +23,7 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
@@ -141,6 +142,18 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		sa := &v1.ServiceAccount{}
 		err := k8sClient.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: operatorNamespace}, sa)
 		return sa, err
+	}
+
+	getRole := func() (*rbacv1.Role, error) {
+		role := &rbacv1.Role{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: operatorNamespace}, role)
+		return role, err
+	}
+
+	getRoleBinding := func() (*rbacv1.RoleBinding, error) {
+		rb := &rbacv1.RoleBinding{}
+		err := k8sClient.Get(ctx, types.NamespacedName{Name: consolePluginName, Namespace: operatorNamespace}, rb)
+		return rb, err
 	}
 
 	doReconcile := func() (reconcile.Result, error) {
@@ -338,6 +351,46 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		})
 	})
 
+	Context("buildRole", func() {
+		// The console plugin stores one Secret per OpenShift user.
+		It("should allow the plugin to manage its credential Secrets", func() {
+			role := reconciler.buildRole()
+			Expect(role.Name).To(Equal(consolePluginName))
+			Expect(role.Namespace).To(Equal(operatorNamespace))
+			Expect(role.Rules).To(HaveLen(1))
+
+			rule := role.Rules[0]
+			Expect(rule.APIGroups).To(Equal([]string{""}))
+			Expect(rule.Resources).To(Equal([]string{"secrets"}))
+			Expect(rule.Verbs).To(ConsistOf("create", "get", "update", "delete"))
+		})
+
+		// Namespaced on purpose: credentials never leave the namespace the
+		// operator installed into.
+		It("should not grant anything beyond secrets", func() {
+			role := reconciler.buildRole()
+
+			for _, rule := range role.Rules {
+				Expect(rule.Resources).To(ConsistOf("secrets"))
+			}
+		})
+	})
+
+	Context("buildRoleBinding", func() {
+		It("should bind the role to the plugin ServiceAccount", func() {
+			rb := reconciler.buildRoleBinding()
+			Expect(rb.Name).To(Equal(consolePluginName))
+			Expect(rb.Namespace).To(Equal(operatorNamespace))
+			Expect(rb.RoleRef.Kind).To(Equal("Role"))
+			Expect(rb.RoleRef.Name).To(Equal(consolePluginName))
+
+			Expect(rb.Subjects).To(HaveLen(1))
+			Expect(rb.Subjects[0].Kind).To(Equal(rbacv1.ServiceAccountKind))
+			Expect(rb.Subjects[0].Name).To(Equal(consolePluginName))
+			Expect(rb.Subjects[0].Namespace).To(Equal(operatorNamespace))
+		})
+	})
+
 	Context("Reconcile", func() {
 		It("should create all resources when enabled", func() {
 			createConfigMap(map[string]string{consolePluginConfigKey: "true"})
@@ -359,6 +412,12 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			Expect(svc.Annotations["service.alpha.openshift.io/serving-cert-secret-name"]).To(Equal(consolePluginCertSecret))
 
 			_, err = getServiceAccount()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = getRole()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = getRoleBinding()
 			Expect(err).NotTo(HaveOccurred())
 		})
 
@@ -389,6 +448,12 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 
 			_, err = getServiceAccount()
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+			_, err = getRole()
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+
+			_, err = getRoleBinding()
 			Expect(apierrors.IsNotFound(err)).To(BeTrue())
 		})
 

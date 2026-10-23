@@ -1,7 +1,7 @@
 # The func binary is built and productized separately from its own rhel9 build
 # (see https://github.com/openshift/functions/blob/main/Dockerfile.func.rhel9);
 # pull it from that image instead of building it from source here.
-ARG FUNC_CLI_IMG=quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-func@sha256:c5524ead1c8f551ca331abad08c92749d3edc1b0f75ce0f6079b49cde3e43068
+ARG FUNC_CLI_IMG=quay.io/redhat-user-workloads/ocp-serverless-tenant/functions-func@sha256:4e0dd3142ac23ae325d46debbdfcabc227d1a5b6e415e0dabdef42eeeaeda9b0
 
 ARG GO_BUILDER=registry.ci.openshift.org/openshift/release:rhel-9-release-golang-1.26-openshift-5.0@sha256:0def5f4d0e9300f0416428dcad6743ac442f6d67de217758c0b2d2957d8eaf69
 ARG GO_RUNTIME=registry.access.redhat.com/ubi9/ubi-minimal@sha256:c4c285d42941ebb2bd4da878479008e1e4536bb599aad1dbe568f89de9053661

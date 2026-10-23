@@ -32,7 +32,7 @@ spec:
     value: ./Dockerfile.source-objectbucket.rhel9
   - name: build-args
     value:
-    - GO_BUILDER=brew.registry.redhat.io/rh-osbs/openshift-golang-builder:rhel_9_1.26
+    - GO_BUILDER=registry.redhat.io/openshift/golang-builder:golang-builder-v1.26-rhel9
   - name: build-source-image
     value: "true"
   pipelineSpec:

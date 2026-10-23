@@ -515,7 +515,7 @@ spec:
                         value: "8888"
                       - name: NOTIFICATIONS_MODE
                         value: http
-                    image: registry.redhat.io/openshift-serverless-tech-preview/objectbucket-notifications-adapter-rhel9@sha256:aadc3d26e1abeba990e6c572919979a03c39775ce70f587a09387b51e159dde7
+                    image: registry.redhat.io/openshift-serverless-tech-preview/objectbucket-notifications-adapter-rhel9@sha256:a7c4c10cd74b64c9bd310e05b2052916e3f01c05d360f38c9b721c05855ae34e
                     livenessProbe:
                       httpGet:
                         path: /healthz
@@ -652,6 +652,6 @@ spec:
     - name: func-operator
       image: registry.redhat.io/openshift-serverless-tech-preview/functions-rhel9-operator@sha256:7d97068ea5bdd3ed077a3a8e69d0b74c81428329804349bf252fce5f360396ce
     - name: objectbucket-notifications-adapter
-      image: registry.redhat.io/openshift-serverless-tech-preview/objectbucket-notifications-adapter-rhel9@sha256:aadc3d26e1abeba990e6c572919979a03c39775ce70f587a09387b51e159dde7
+      image: registry.redhat.io/openshift-serverless-tech-preview/objectbucket-notifications-adapter-rhel9@sha256:a7c4c10cd74b64c9bd310e05b2052916e3f01c05d360f38c9b721c05855ae34e
     - name: faas-console-plugin
       image: registry.redhat.io/openshift-serverless-tech-preview/functions-console-plugin-rhel9@sha256:dff654b0fdbb0493db0b601266bc1f39a1cbab5027986f21d4d59e0e3aa57851

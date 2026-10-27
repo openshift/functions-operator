@@ -9,5 +9,14 @@
     "+(Dockerfile)",
     "+(Dockerfile.source-objectbucket)",
     "catalogs/*/Dockerfile*"
+  ],
+  "packageRules": [
+    {
+      "matchDatasources": ["docker"],
+      "enabled": false,
+      "matchPackageNames": [
+        "/^registry\\.ci\\.openshift\\.org//"
+      ]
+    }
   ]
 }

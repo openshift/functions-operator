@@ -1,7 +1,0 @@
-# Remove the default controller-config ConfigMap from the bundle. The operator
-# creates it at runtime via the --create-config flag (see create_config_patch.yaml).
-$patch: delete
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: func-operator-controller-config

@@ -29,7 +29,7 @@ metadata:
         }
       ]
     capabilities: Basic Install
-    createdAt: "2026-10-13T14:08:08Z"
+    createdAt: "2026-11-02T18:30:06Z"
     operators.operatorframework.io/builder: operator-sdk-v1.42.2+git
     operators.operatorframework.io/project_layout: go.kubebuilder.io/v4
     console.openshift.io/plugins: '["console-functions-plugin"]'
@@ -127,6 +127,7 @@ spec:
                 - config.openshift.io
               resources:
                 - infrastructures
+                - clusterversions
               verbs:
                 - get
             - apiGroups:

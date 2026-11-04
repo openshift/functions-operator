@@ -42,12 +42,38 @@ rules:
   - replicasets
   verbs:
   - get
+# clusterrolebindings list is also used to find the OLM-owned binding.
+# Reads stay unrestricted so the controller can cache and watch both kinds.
 - apiGroups:
   - rbac.authorization.k8s.io
   resources:
+  - clusterroles
   - clusterrolebindings
   verbs:
+  - get
   - list
+  - watch
+  - create
+# Writes are limited to the plugin's own token review grant.
+- apiGroups:
+  - rbac.authorization.k8s.io
+  resources:
+  - clusterroles
+  - clusterrolebindings
+  resourceNames:
+  - console-functions-plugin-token-review
+  verbs:
+  - update
+  - patch
+  - delete
+# The operator grants tokenreviews create to the plugin ServiceAccount, and
+# RBAC only lets it grant permissions it holds itself.
+- apiGroups:
+  - authentication.k8s.io
+  resources:
+  - tokenreviews
+  verbs:
+  - create
 - apiGroups:
   - config.openshift.io
   resources:

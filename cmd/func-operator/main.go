@@ -34,6 +34,7 @@ import (
 	// to ensure that exec-entrypoint and run can make use of them.
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	rbacv1 "k8s.io/api/rbac/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
 	"k8s.io/apimachinery/pkg/runtime"
@@ -264,6 +265,18 @@ func setupCacheOptions(operatorNamespace string) cache.Options {
 		&appsv1.Deployment{}: {Namespaces: operatorNsConfig},
 		&v1.Service{}:        {Namespaces: operatorNsConfig},
 		&v1.ServiceAccount{}: {Namespaces: operatorNsConfig},
+	}
+
+	// Roles and RoleBindings are read in the Function namespaces and, by the
+	// consoleplugin controller, in the operator's namespace, which a limited
+	// set of watched namespaces may not include.
+	if len(watchNamespaces) > 0 {
+		rbacNsConfig := map[string]cache.Config{operatorNamespace: {}}
+		for ns := range cacheOpts.DefaultNamespaces {
+			rbacNsConfig[ns] = cache.Config{}
+		}
+		cacheOpts.ByObject[&rbacv1.Role{}] = cache.ByObject{Namespaces: rbacNsConfig}
+		cacheOpts.ByObject[&rbacv1.RoleBinding{}] = cache.ByObject{Namespaces: rbacNsConfig}
 	}
 
 	return cacheOpts

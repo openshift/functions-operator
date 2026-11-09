@@ -5,9 +5,9 @@ go 1.26.0
 require (
 	code.gitea.io/sdk/gitea v0.25.1
 	github.com/IBM/sarama v1.61.1
-	github.com/aws/aws-sdk-go-v2 v1.47.5
-	github.com/aws/aws-sdk-go-v2/credentials v1.20.13
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.6
+	github.com/aws/aws-sdk-go-v2 v1.47.7
+	github.com/aws/aws-sdk-go-v2/credentials v1.20.15
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.8
 	github.com/cloudevents/sdk-go/v2 v2.16.2
 	github.com/functions-dev/func-operator/api v0.0.0
 	github.com/go-git/go-git/v6 v6.0.0-beta.1
@@ -17,7 +17,7 @@ require (
 	github.com/onsi/gomega v1.44.0
 	github.com/prometheus/client_golang v1.25.0
 	github.com/stretchr/testify v1.12.1
-	github.com/xdg-go/scram v1.2.0
+	github.com/xdg-go/scram v1.4.0
 	golang.org/x/crypto v0.58.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.36.6
@@ -37,15 +37,15 @@ require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/ProtonMail/go-crypto v1.5.2 // indirect
 	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.25 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.8 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.8 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.8 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.23 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.11.9 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.8 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.8 // indirect
-	github.com/aws/smithy-go v1.28.7 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.26 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.5.10 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.8.10 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.5.10 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.24 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.11.11 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.14.10 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.20.10 // indirect
+	github.com/aws/smithy-go v1.28.8 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/blang/semver/v4 v4.0.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
@@ -130,7 +130,6 @@ require (
 	github.com/vbatts/tar-split v0.12.2 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xanzy/ssh-agent v0.3.3 // indirect
-	github.com/xdg-go/pbkdf2 v1.0.0 // indirect
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.70.0 // indirect

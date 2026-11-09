@@ -1,5 +1,0 @@
-resources:
-- consoleplugin_clusterrole.yaml
-- consoleplugin_clusterrolebinding.yaml
-- networkpolicy_clusterrole.yaml
-- networkpolicy_clusterrolebinding.yaml

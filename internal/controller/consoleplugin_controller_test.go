@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"strconv"
 
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -130,6 +131,16 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			Data: data,
 		}
 		Expect(k8sClient.Create(ctx, cm)).To(Succeed())
+	}
+
+	updateConfigMap := func(mutate func(data map[string]string)) {
+		cm := &v1.ConfigMap{}
+		Expect(k8sClient.Get(ctx, types.NamespacedName{Name: controllerConfigName, Namespace: operatorNamespace}, cm)).To(Succeed())
+		if cm.Data == nil {
+			cm.Data = map[string]string{}
+		}
+		mutate(cm.Data)
+		Expect(k8sClient.Update(ctx, cm)).To(Succeed())
 	}
 
 	getConsolePlugin := func() (*unstructured.Unstructured, error) {
@@ -257,6 +268,64 @@ var _ = Describe("ConsolePlugin Controller", func() {
 		})
 	})
 
+	Context("getWorkflowPollingInterval", func() {
+		It("should return empty string when key is missing from configmap", func() {
+			createConfigMap(map[string]string{consolePluginConfigKey: "true"})
+			interval, err := reconciler.getWorkflowPollingInterval(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(interval).To(BeEmpty())
+		})
+
+		It("should return empty string when value is empty", func() {
+			createConfigMap(map[string]string{
+				consolePluginConfigKey:           "true",
+				workflowPollingIntervalConfigKey: "",
+			})
+			interval, err := reconciler.getWorkflowPollingInterval(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(interval).To(BeEmpty())
+		})
+
+		DescribeTable("should return a positive duration verbatim", func(value string) {
+			createConfigMap(map[string]string{
+				consolePluginConfigKey:           "true",
+				workflowPollingIntervalConfigKey: value,
+			})
+			interval, err := reconciler.getWorkflowPollingInterval(ctx)
+			Expect(err).NotTo(HaveOccurred())
+			Expect(interval).To(Equal(value))
+		},
+			Entry("seconds", "10s"),
+			Entry("seconds beyond a minute, not normalized", "90s"),
+			Entry("minutes and seconds", "1m30s"),
+			Entry("milliseconds", "500ms"),
+		)
+
+		DescribeTable("should return an error for a malformed, zero, or negative value", func(value string) {
+			createConfigMap(map[string]string{
+				consolePluginConfigKey:           "true",
+				workflowPollingIntervalConfigKey: value,
+			})
+			_, err := reconciler.getWorkflowPollingInterval(ctx)
+			Expect(err).To(MatchError(And(
+				ContainSubstring(workflowPollingIntervalConfigKey),
+				ContainSubstring(strconv.Quote(value)),
+				ContainSubstring("must be a positive duration"),
+			)))
+		},
+			Entry("malformed", "abc"),
+			Entry("missing unit", "10"),
+			Entry("days are not supported", "1d"),
+			Entry("zero", "0s"),
+			Entry("negative", "-1s"),
+		)
+
+		It("should return error when configmap does not exist", func() {
+			_, err := reconciler.getWorkflowPollingInterval(ctx)
+			Expect(err).To(HaveOccurred())
+		})
+	})
+
 	Context("buildConsolePlugin", func() {
 		It("should build a ConsolePlugin with correct structure", func() {
 			cp := reconciler.buildConsolePlugin()
@@ -300,7 +369,7 @@ var _ = Describe("ConsolePlugin Controller", func() {
 
 	Context("buildDeployment", func() {
 		It("should build a Deployment with the correct image and args", func() {
-			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, "")
+			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, "", "")
 			Expect(deploy.Name).To(Equal(consolePluginName))
 			Expect(deploy.Namespace).To(Equal(operatorNamespace))
 			Expect(*deploy.Spec.Replicas).To(Equal(int32(2)))
@@ -312,13 +381,14 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			Expect(container.Args).To(ContainElement("--external-api-server-url=" + testAPIServerURL))
 			Expect(container.Args).To(ContainElement("--cluster-id=" + testClusterID))
 			Expect(container.Args).NotTo(ContainElement(ContainSubstring("--gh-api-url")))
+			Expect(container.Args).NotTo(ContainElement(ContainSubstring("--workflow-polling-interval")))
 
 			Expect(deploy.Spec.Template.Spec.ServiceAccountName).To(Equal(consolePluginName))
 			Expect(deploy.Spec.Template.Spec.Volumes[0].Secret.SecretName).To(Equal(consolePluginCertSecret))
 		})
 
 		It("should include liveness and readiness probes", func() {
-			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, "")
+			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, "", "")
 			container := deploy.Spec.Template.Spec.Containers[0]
 
 			expectedPort := intstr.FromInt32(consolePluginPortInt32)
@@ -342,15 +412,27 @@ var _ = Describe("ConsolePlugin Controller", func() {
 
 		It("should include --gh-api-url arg when ghApiURL is provided", func() {
 			ghURL := "https://github.example.com/api/v3"
-			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, ghURL)
+			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, ghURL, "")
 			container := deploy.Spec.Template.Spec.Containers[0]
 			Expect(container.Args).To(ContainElement("--gh-api-url=" + ghURL))
 		})
 
 		It("should not include --gh-api-url arg when ghApiURL is empty", func() {
-			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, "")
+			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, "", "")
 			container := deploy.Spec.Template.Spec.Containers[0]
 			Expect(container.Args).NotTo(ContainElement(ContainSubstring("--gh-api-url")))
+		})
+
+		It("should include --workflow-polling-interval arg when workflowPollingInterval is provided", func() {
+			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, "", "1m30s")
+			container := deploy.Spec.Template.Spec.Containers[0]
+			Expect(container.Args).To(ContainElement("--workflow-polling-interval=1m30s"))
+		})
+
+		It("should not include --workflow-polling-interval arg when workflowPollingInterval is empty", func() {
+			deploy := reconciler.buildDeployment(testAPIServerURL, testClusterID, "", "")
+			container := deploy.Spec.Template.Spec.Containers[0]
+			Expect(container.Args).NotTo(ContainElement(ContainSubstring("--workflow-polling-interval")))
 		})
 	})
 
@@ -532,6 +614,149 @@ var _ = Describe("ConsolePlugin Controller", func() {
 			deploy, err := getDeployment()
 			Expect(err).NotTo(HaveOccurred())
 			Expect(deploy.Spec.Template.Spec.Containers[0].Args).NotTo(ContainElement(ContainSubstring("--gh-api-url")))
+		})
+
+		It("should pass --workflow-polling-interval verbatim when workflowPollingInterval is in ConfigMap", func() {
+			createConfigMap(map[string]string{
+				consolePluginConfigKey:           "true",
+				workflowPollingIntervalConfigKey: "90s",
+			})
+
+			result, err := doReconcile()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(result).To(Equal(reconcile.Result{}))
+
+			deploy, err := getDeployment()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deploy.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--workflow-polling-interval=90s"))
+		})
+
+		DescribeTable("should not pass --workflow-polling-interval when workflowPollingInterval is unset",
+			func(data map[string]string) {
+				createConfigMap(data)
+
+				_, err := doReconcile()
+				Expect(err).NotTo(HaveOccurred())
+
+				deploy, err := getDeployment()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(deploy.Spec.Template.Spec.Containers[0].Args).NotTo(ContainElement(ContainSubstring("--workflow-polling-interval")))
+			},
+			Entry("key absent", map[string]string{consolePluginConfigKey: "true"}),
+			Entry("key empty", map[string]string{consolePluginConfigKey: "true", workflowPollingIntervalConfigKey: ""}),
+		)
+
+		It("should update and remove --workflow-polling-interval when workflowPollingInterval changes", func() {
+			createConfigMap(map[string]string{
+				consolePluginConfigKey:           "true",
+				workflowPollingIntervalConfigKey: "10s",
+			})
+			_, err := doReconcile()
+			Expect(err).NotTo(HaveOccurred())
+
+			updateConfigMap(func(data map[string]string) { data[workflowPollingIntervalConfigKey] = "30s" })
+			_, err = doReconcile()
+			Expect(err).NotTo(HaveOccurred())
+
+			deploy, err := getDeployment()
+			Expect(err).NotTo(HaveOccurred())
+			args := deploy.Spec.Template.Spec.Containers[0].Args
+			Expect(args).To(ContainElement("--workflow-polling-interval=30s"))
+			Expect(args).NotTo(ContainElement("--workflow-polling-interval=10s"))
+
+			updateConfigMap(func(data map[string]string) { delete(data, workflowPollingIntervalConfigKey) })
+			_, err = doReconcile()
+			Expect(err).NotTo(HaveOccurred())
+
+			deploy, err = getDeployment()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deploy.Spec.Template.Spec.Containers[0].Args).NotTo(ContainElement(ContainSubstring("--workflow-polling-interval")))
+		})
+
+		DescribeTable("should fail without changing the Deployment when workflowPollingInterval is invalid",
+			func(value string) {
+				createConfigMap(map[string]string{
+					consolePluginConfigKey:           "true",
+					workflowPollingIntervalConfigKey: "10s",
+				})
+				_, err := doReconcile()
+				Expect(err).NotTo(HaveOccurred())
+				before, err := getDeployment()
+				Expect(err).NotTo(HaveOccurred())
+
+				updateConfigMap(func(data map[string]string) { data[workflowPollingIntervalConfigKey] = value })
+				_, err = doReconcile()
+				Expect(err).To(MatchError(And(
+					ContainSubstring(workflowPollingIntervalConfigKey),
+					ContainSubstring(strconv.Quote(value)),
+				)))
+
+				after, err := getDeployment()
+				Expect(err).NotTo(HaveOccurred())
+				Expect(after.ResourceVersion).To(Equal(before.ResourceVersion))
+				Expect(after.Spec.Template.Spec.Containers[0].Args).To(ContainElement("--workflow-polling-interval=10s"))
+			},
+			Entry("malformed", "abc"),
+			Entry("zero", "0s"),
+			Entry("negative", "-1s"),
+		)
+
+		It("should not create plugin resources when workflowPollingInterval is invalid on first reconcile", func() {
+			createConfigMap(map[string]string{
+				consolePluginConfigKey:           "true",
+				workflowPollingIntervalConfigKey: "-1s",
+			})
+
+			_, err := doReconcile()
+			Expect(err).To(HaveOccurred())
+
+			_, err = getDeployment()
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+			_, err = getServiceAccount()
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+
+		It("should delete plugin resources without validating workflowPollingInterval when the console plugin is disabled", func() {
+			createConfigMap(map[string]string{consolePluginConfigKey: "true"})
+			_, err := doReconcile()
+			Expect(err).NotTo(HaveOccurred())
+
+			updateConfigMap(func(data map[string]string) {
+				data[consolePluginConfigKey] = "false"
+				data[workflowPollingIntervalConfigKey] = "abc"
+			})
+			_, err = doReconcile()
+			Expect(err).NotTo(HaveOccurred())
+
+			_, err = getDeployment()
+			Expect(apierrors.IsNotFound(err)).To(BeTrue())
+		})
+
+		It("should keep the pre-existing Deployment args when the ConfigMap has no workflowPollingInterval", func() {
+			GinkgoT().Setenv("GH_API_URL", "")
+			createConfigMap(map[string]string{
+				"autoUpdateMiddleware": "true",
+				consolePluginConfigKey: "true",
+				"ghApiUrl":             "https://gh.example.com/api/v3",
+			})
+			expectedArgs := []string{
+				"--https-port=9443",
+				"--external-api-server-url=" + testAPIServerURL,
+				"--cluster-id=" + testClusterID,
+				"--gh-api-url=https://gh.example.com/api/v3",
+			}
+
+			_, err := doReconcile()
+			Expect(err).NotTo(HaveOccurred())
+			deploy, err := getDeployment()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deploy.Spec.Template.Spec.Containers[0].Args).To(Equal(expectedArgs))
+
+			_, err = doReconcile()
+			Expect(err).NotTo(HaveOccurred())
+			deploy, err = getDeployment()
+			Expect(err).NotTo(HaveOccurred())
+			Expect(deploy.Spec.Template.Spec.Containers[0].Args).To(Equal(expectedArgs))
 		})
 
 		It("should not create resources when key is absent", func() {

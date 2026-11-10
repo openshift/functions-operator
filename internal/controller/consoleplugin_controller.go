@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -52,6 +53,10 @@ const (
 	consolePluginKind       = "ConsolePlugin"
 	consolePluginCertSecret = "faas-console-plugin-cert"
 	consolePluginCertMount  = "/var/cert"
+
+	// workflowPollingIntervalConfigKey sets the plugin's
+	// --workflow-polling-interval. Unset or empty keeps the plugin default.
+	workflowPollingIntervalConfigKey = "workflowPollingInterval"
 
 	infrastructureAPIVersion = "config.openshift.io/v1"
 	infrastructureKind       = "Infrastructure"
@@ -106,6 +111,12 @@ func (r *ConsolePluginReconciler) Reconcile(ctx context.Context, _ ctrl.Request)
 
 		ghApiURL := r.getGHApiURL(ctx)
 
+		workflowPollingInterval, err := r.getWorkflowPollingInterval(ctx)
+		if err != nil {
+			logger.Error(err, "Failed to read workflow polling interval from config")
+			return ctrl.Result{}, err
+		}
+
 		if err := r.ensureServiceAccount(ctx); err != nil {
 			logger.Error(err, "Failed to ensure ServiceAccount")
 			return ctrl.Result{}, err
@@ -122,7 +133,7 @@ func (r *ConsolePluginReconciler) Reconcile(ctx context.Context, _ ctrl.Request)
 			logger.Error(err, "Failed to ensure Service")
 			return ctrl.Result{}, err
 		}
-		if err := r.ensureDeployment(ctx, apiServerURL, clusterID, ghApiURL); err != nil {
+		if err := r.ensureDeployment(ctx, apiServerURL, clusterID, ghApiURL, workflowPollingInterval); err != nil {
 			logger.Error(err, "Failed to ensure Deployment")
 			return ctrl.Result{}, err
 		}
@@ -238,6 +249,27 @@ func (r *ConsolePluginReconciler) getGHApiURL(ctx context.Context) string {
 	}
 	// Fall back to GH_API_URL environment variable
 	return os.Getenv("GH_API_URL")
+}
+
+// getWorkflowPollingInterval returns the workflowPollingInterval value from the
+// controller-config ConfigMap, or "" when it is absent or empty so the plugin
+// keeps its default. A set value must be a positive duration, the rule the
+// plugin applies to --workflow-polling-interval, and is returned verbatim.
+func (r *ConsolePluginReconciler) getWorkflowPollingInterval(ctx context.Context) (string, error) {
+	cm := &v1.ConfigMap{}
+	if err := r.Get(ctx, types.NamespacedName{Namespace: r.OperatorNamespace, Name: controllerConfigName}, cm); err != nil {
+		return "", fmt.Errorf("failed to get operator config configmap: %w", err)
+	}
+
+	val := cm.Data[workflowPollingIntervalConfigKey]
+	if val == "" {
+		return "", nil
+	}
+	if d, err := time.ParseDuration(val); err != nil || d <= 0 {
+		return "", fmt.Errorf("invalid %s value %q in configmap: must be a positive duration such as 3s, 30s, or 1m",
+			workflowPollingIntervalConfigKey, val)
+	}
+	return val, nil
 }
 
 func (r *ConsolePluginReconciler) resolveOLMOwnership(ctx context.Context) error {
@@ -475,7 +507,7 @@ func (r *ConsolePluginReconciler) buildService() *v1.Service {
 	}
 }
 
-func (r *ConsolePluginReconciler) buildDeployment(apiServerURL, clusterID, ghApiURL string) *appsv1.Deployment {
+func (r *ConsolePluginReconciler) buildDeployment(apiServerURL, clusterID, ghApiURL, workflowPollingInterval string) *appsv1.Deployment {
 	args := []string{
 		"--https-port=9443",
 		fmt.Sprintf("--external-api-server-url=%s", apiServerURL),
@@ -483,6 +515,9 @@ func (r *ConsolePluginReconciler) buildDeployment(apiServerURL, clusterID, ghApi
 	}
 	if ghApiURL != "" {
 		args = append(args, fmt.Sprintf("--gh-api-url=%s", ghApiURL))
+	}
+	if workflowPollingInterval != "" {
+		args = append(args, fmt.Sprintf("--workflow-polling-interval=%s", workflowPollingInterval))
 	}
 
 	return &appsv1.Deployment{
@@ -729,9 +764,9 @@ func (r *ConsolePluginReconciler) ensureService(ctx context.Context) error {
 	return r.Update(ctx, existing)
 }
 
-func (r *ConsolePluginReconciler) ensureDeployment(ctx context.Context, apiServerURL, clusterID, ghApiURL string) error {
+func (r *ConsolePluginReconciler) ensureDeployment(ctx context.Context, apiServerURL, clusterID, ghApiURL, workflowPollingInterval string) error {
 	logger := log.FromContext(ctx)
-	desired := r.buildDeployment(apiServerURL, clusterID, ghApiURL)
+	desired := r.buildDeployment(apiServerURL, clusterID, ghApiURL, workflowPollingInterval)
 	ensureOwnerRef(desired, r.deploymentOwnerRef)
 
 	existing := &appsv1.Deployment{}

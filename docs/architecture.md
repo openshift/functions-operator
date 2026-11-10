@@ -100,6 +100,7 @@ The operator reads its default config from a ConfigMap named `func-operator-cont
 | Key | Description | Default |
 |-----|-------------|---------|
 | `autoUpdateMiddleware` | Whether to auto-rebuild functions with outdated middleware | `true` |
+| `workflowPollingInterval` | Interval at which the console plugin polls GitHub workflow runs, passed verbatim as `--workflow-polling-interval`. Must be a positive Go duration (for example `10s`); while the console plugin is enabled, invalid values fail reconciliation without changing the plugin Deployment. Requires the operator's `CONSOLE_PLUGIN_IMAGE` to reference a plugin image that supports the flag | unset (plugin default `3s`) |
 
 Per-function overrides are possible via `spec.autoUpdateMiddleware` on the Function CR.
 

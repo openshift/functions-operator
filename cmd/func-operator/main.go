@@ -32,7 +32,6 @@ import (
 
 	// Import all Kubernetes client auth plugins (e.g. Azure, GCP, OIDC, etc.)
 	// to ensure that exec-entrypoint and run can make use of them.
-	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
 
@@ -255,15 +254,14 @@ func setupCacheOptions(operatorNamespace string) cache.Options {
 		setupLog.Info("Operator watching all namespaces")
 	}
 
-	// Watch these types only in the operator's namespace.
-	// They are only used by the consoleplugin controller and the controller-config ConfigMap,
-	// without affecting which namespaces Functions are watched in.
-	operatorNsConfig := map[string]cache.Config{operatorNamespace: {}}
+	// Always watch ConfigMaps in the operator's namespace so it can access the controller-config ConfigMap,
+	// without affecting which namespaces Functions are watched in
 	cacheOpts.ByObject = map[client.Object]cache.ByObject{
-		&v1.ConfigMap{}:      {Namespaces: operatorNsConfig},
-		&appsv1.Deployment{}: {Namespaces: operatorNsConfig},
-		&v1.Service{}:        {Namespaces: operatorNsConfig},
-		&v1.ServiceAccount{}: {Namespaces: operatorNsConfig},
+		&v1.ConfigMap{}: {
+			Namespaces: map[string]cache.Config{
+				operatorNamespace: {},
+			},
+		},
 	}
 
 	return cacheOpts
@@ -380,16 +378,6 @@ func main() {
 		OperatorNamespace: operatorNamespace,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Function")
-		os.Exit(1)
-	}
-	if err := (&controller.ConsolePluginReconciler{
-		Client:             mgr.GetClient(),
-		DirectReader:       mgr.GetAPIReader(),
-		OperatorNamespace:  operatorNamespace,
-		ConsolePluginImage: os.Getenv("CONSOLE_PLUGIN_IMAGE"),
-		PodName:            os.Getenv("POD_NAME"),
-	}).SetupWithManager(mgr); err != nil {
-		setupLog.Error(err, "unable to create controller", "controller", "ConsolePlugin")
 		os.Exit(1)
 	}
 	// +kubebuilder:scaffold:builder

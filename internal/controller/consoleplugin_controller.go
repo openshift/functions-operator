@@ -53,6 +53,10 @@ const (
 	consolePluginCertSecret = "faas-console-plugin-cert"
 	consolePluginCertMount  = "/var/cert"
 
+	// Cluster-scoped grant, so it needs a name distinct from the
+	// namespace-scoped plugin resources.
+	consolePluginTokenReviewName = consolePluginName + "-token-review"
+
 	infrastructureAPIVersion = "config.openshift.io/v1"
 	infrastructureKind       = "Infrastructure"
 	infrastructureName       = "cluster"
@@ -118,6 +122,10 @@ func (r *ConsolePluginReconciler) Reconcile(ctx context.Context, _ ctrl.Request)
 			logger.Error(err, "Failed to ensure RoleBinding")
 			return ctrl.Result{}, err
 		}
+		if err := r.ensureTokenReviewRBAC(ctx); err != nil {
+			logger.Error(err, "Failed to ensure token review RBAC")
+			return ctrl.Result{}, err
+		}
 		if err := r.ensureService(ctx); err != nil {
 			logger.Error(err, "Failed to ensure Service")
 			return ctrl.Result{}, err
@@ -146,6 +154,10 @@ func (r *ConsolePluginReconciler) Reconcile(ctx context.Context, _ ctrl.Request)
 		}
 		if err := r.deleteRoleBinding(ctx); err != nil {
 			logger.Error(err, "Failed to delete RoleBinding")
+			return ctrl.Result{}, err
+		}
+		if err := r.deleteTokenReviewRBAC(ctx); err != nil {
+			logger.Error(err, "Failed to delete token review RBAC")
 			return ctrl.Result{}, err
 		}
 		if err := r.deleteRole(ctx); err != nil {
@@ -450,6 +462,47 @@ func (r *ConsolePluginReconciler) buildRoleBinding() *rbacv1.RoleBinding {
 	}
 }
 
+// The plugin backend resolves console-forwarded user tokens with TokenReview,
+// asking the API server who a token belongs to under its own ServiceAccount
+// identity. TokenReviews are a cluster-scoped resource, so the grant is
+// cluster-scoped too.
+func (r *ConsolePluginReconciler) buildTokenReviewClusterRole() *rbacv1.ClusterRole {
+	return &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   consolePluginTokenReviewName,
+			Labels: consolePluginLabels(),
+		},
+		Rules: []rbacv1.PolicyRule{
+			{
+				APIGroups: []string{"authentication.k8s.io"},
+				Resources: []string{"tokenreviews"},
+				Verbs:     []string{"create"},
+			},
+		},
+	}
+}
+
+func (r *ConsolePluginReconciler) buildTokenReviewClusterRoleBinding() *rbacv1.ClusterRoleBinding {
+	return &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:   consolePluginTokenReviewName,
+			Labels: consolePluginLabels(),
+		},
+		RoleRef: rbacv1.RoleRef{
+			APIGroup: rbacv1.GroupName,
+			Kind:     "ClusterRole",
+			Name:     consolePluginTokenReviewName,
+		},
+		Subjects: []rbacv1.Subject{
+			{
+				Kind:      rbacv1.ServiceAccountKind,
+				Name:      consolePluginName,
+				Namespace: r.OperatorNamespace,
+			},
+		},
+	}
+}
+
 func (r *ConsolePluginReconciler) buildService() *v1.Service {
 	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
@@ -704,6 +757,68 @@ func (r *ConsolePluginReconciler) ensureRoleBinding(ctx context.Context) error {
 	return r.Update(ctx, existing)
 }
 
+func (r *ConsolePluginReconciler) ensureTokenReviewRBAC(ctx context.Context) error {
+	if err := r.ensureTokenReviewClusterRole(ctx); err != nil {
+		return err
+	}
+	return r.ensureTokenReviewClusterRoleBinding(ctx)
+}
+
+func (r *ConsolePluginReconciler) ensureTokenReviewClusterRole(ctx context.Context) error {
+	logger := log.FromContext(ctx)
+	desired := r.buildTokenReviewClusterRole()
+	// Cluster-scoped, so it can only carry the cluster-scoped OLM owner.
+	ensureOwnerRef(desired, r.clusterOwnerRef)
+
+	existing := &rbacv1.ClusterRole{}
+	err := r.Get(ctx, types.NamespacedName{Name: consolePluginTokenReviewName}, existing)
+	if apierrors.IsNotFound(err) {
+		logger.Info("Creating ClusterRole", "name", consolePluginTokenReviewName)
+		return r.Create(ctx, desired)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get token review ClusterRole: %w", err)
+	}
+
+	existing.Labels = desired.Labels
+	existing.Rules = desired.Rules
+	ensureOwnerRef(existing, r.clusterOwnerRef)
+	logger.Info("Updating ClusterRole", "name", consolePluginTokenReviewName)
+	return r.Update(ctx, existing)
+}
+
+func (r *ConsolePluginReconciler) ensureTokenReviewClusterRoleBinding(ctx context.Context) error {
+	logger := log.FromContext(ctx)
+	desired := r.buildTokenReviewClusterRoleBinding()
+	ensureOwnerRef(desired, r.clusterOwnerRef)
+
+	existing := &rbacv1.ClusterRoleBinding{}
+	err := r.Get(ctx, types.NamespacedName{Name: consolePluginTokenReviewName}, existing)
+	if apierrors.IsNotFound(err) {
+		logger.Info("Creating ClusterRoleBinding", "name", consolePluginTokenReviewName)
+		return r.Create(ctx, desired)
+	}
+	if err != nil {
+		return fmt.Errorf("failed to get token review ClusterRoleBinding: %w", err)
+	}
+
+	// RoleRef is immutable, so a changed one has to be replaced rather than
+	// updated in place.
+	if existing.RoleRef != desired.RoleRef {
+		logger.Info("Replacing ClusterRoleBinding with a changed roleRef", "name", consolePluginTokenReviewName)
+		if err := r.Delete(ctx, existing); err != nil && !apierrors.IsNotFound(err) {
+			return fmt.Errorf("failed to delete token review ClusterRoleBinding: %w", err)
+		}
+		return r.Create(ctx, desired)
+	}
+
+	existing.Labels = desired.Labels
+	existing.Subjects = desired.Subjects
+	ensureOwnerRef(existing, r.clusterOwnerRef)
+	logger.Info("Updating ClusterRoleBinding", "name", consolePluginTokenReviewName)
+	return r.Update(ctx, existing)
+}
+
 func (r *ConsolePluginReconciler) ensureService(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 	desired := r.buildService()
@@ -862,6 +977,55 @@ func (r *ConsolePluginReconciler) deleteRoleBinding(ctx context.Context) error {
 	return nil
 }
 
+func (r *ConsolePluginReconciler) deleteTokenReviewRBAC(ctx context.Context) error {
+	if err := r.deleteTokenReviewClusterRoleBinding(ctx); err != nil {
+		return err
+	}
+	return r.deleteTokenReviewClusterRole(ctx)
+}
+
+func (r *ConsolePluginReconciler) deleteTokenReviewClusterRoleBinding(ctx context.Context) error {
+	logger := log.FromContext(ctx)
+
+	crb := &rbacv1.ClusterRoleBinding{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: consolePluginTokenReviewName,
+		},
+	}
+
+	err := r.Delete(ctx, crb)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to delete token review ClusterRoleBinding: %w", err)
+	}
+
+	logger.Info("Deleted ClusterRoleBinding", "name", consolePluginTokenReviewName)
+	return nil
+}
+
+func (r *ConsolePluginReconciler) deleteTokenReviewClusterRole(ctx context.Context) error {
+	logger := log.FromContext(ctx)
+
+	role := &rbacv1.ClusterRole{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: consolePluginTokenReviewName,
+		},
+	}
+
+	err := r.Delete(ctx, role)
+	if apierrors.IsNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to delete token review ClusterRole: %w", err)
+	}
+
+	logger.Info("Deleted ClusterRole", "name", consolePluginTokenReviewName)
+	return nil
+}
+
 func (r *ConsolePluginReconciler) deleteRole(ctx context.Context) error {
 	logger := log.FromContext(ctx)
 
@@ -961,6 +1125,34 @@ func (r *ConsolePluginReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			handler.EnqueueRequestsFromMapFunc(r.mapToRequest),
 			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
 				return obj.GetName() == consolePluginName && obj.GetNamespace() == r.OperatorNamespace
+			})),
+		).
+		Watches(
+			&rbacv1.Role{},
+			handler.EnqueueRequestsFromMapFunc(r.mapToRequest),
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
+				return obj.GetName() == consolePluginName && obj.GetNamespace() == r.OperatorNamespace
+			})),
+		).
+		Watches(
+			&rbacv1.RoleBinding{},
+			handler.EnqueueRequestsFromMapFunc(r.mapToRequest),
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
+				return obj.GetName() == consolePluginName && obj.GetNamespace() == r.OperatorNamespace
+			})),
+		).
+		Watches(
+			&rbacv1.ClusterRole{},
+			handler.EnqueueRequestsFromMapFunc(r.mapToRequest),
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
+				return obj.GetName() == consolePluginTokenReviewName
+			})),
+		).
+		Watches(
+			&rbacv1.ClusterRoleBinding{},
+			handler.EnqueueRequestsFromMapFunc(r.mapToRequest),
+			builder.WithPredicates(predicate.NewPredicateFuncs(func(obj client.Object) bool {
+				return obj.GetName() == consolePluginTokenReviewName
 			})),
 		).
 		Complete(r)

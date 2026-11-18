@@ -4,17 +4,23 @@ This file documents behavior that exists only in the OpenShift build of func-ope
 
 ## Functions Console Plugin
 
-On OpenShift, the operator deploys the Functions console plugin ([openshift/faas-console-plugin](https://github.com/openshift/faas-console-plugin)) when its `CONSOLE_PLUGIN_IMAGE` environment variable is set, the `ConsolePlugin` API is available, and `consolePluginEnabled` is `"true"` in the `func-operator-controller-config` ConfigMap.
+On OpenShift, the operator deploys the Functions console plugin ([openshift/faas-console-plugin](https://github.com/openshift/faas-console-plugin)) when its `CONSOLE_PLUGIN_IMAGE` environment variable is set, the `ConsolePlugin` API is available, and `consolePluginEnabled` is `"true"`.
 
-### Configuring the Console Plugin Workflow Polling Interval
+### Configuration
 
-The console plugin polls GitHub for the latest workflow run of each function repository every 3 seconds by default. To change the interval, add `workflowPollingInterval` to the existing `func-operator-controller-config` ConfigMap, keeping its other keys:
+OpenShift-specific keys in the `func-operator-controller-config` ConfigMap, in the operator's namespace (`func-operator-system` in the OpenShift manifests). The `autoUpdateMiddleware` key is described in the [README](README.md).
+
+| Key | Description | Default |
+|-----|-------------|---------|
+| `consolePluginEnabled` | Deploy the Functions console plugin (`"true"`/`"false"`) | `"true"` in the ConfigMap the operator creates at startup (`--create-config`, set by the OpenShift manifests); a missing key disables the plugin |
+| `ghApiUrl` | GitHub API base URL for the plugin, passed as `--gh-api-url` | unset (falls back to the operator's `GH_API_URL` env; if neither is set, no flag is passed and the plugin uses github.com) |
+| `workflowPollingInterval` | Interval at which the plugin polls GitHub workflow runs, passed as `--workflow-polling-interval` (positive Go duration, e.g. `10s`; while the plugin is enabled, invalid values fail reconciliation) | unset (plugin default `3s`) |
+
+Example:
 
 ```bash
 kubectl patch configmap func-operator-controller-config -n func-operator-system \
   --type merge -p '{"data":{"workflowPollingInterval":"10s"}}'
 ```
 
-The value must be a positive Go duration such as `10s`, `1m`, or `1m30s`, and the operator passes it to the plugin unchanged as `--workflow-polling-interval`. When the key is unset or empty, the operator passes no flag and the plugin keeps its default. While the console plugin is enabled, a malformed, zero, or negative value fails reconciliation with an error naming the key, and the plugin Deployment is left unchanged.
-
-Setting the key requires the operator's `CONSOLE_PLUGIN_IMAGE` environment variable to reference a console plugin image that supports `--workflow-polling-interval`. Older plugin images reject the unknown flag and fail to start.
+Note: `workflowPollingInterval` requires a plugin image (`CONSOLE_PLUGIN_IMAGE`) that supports `--workflow-polling-interval`; older images reject the flag and fail to start.
